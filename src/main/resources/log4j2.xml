@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration xmlns="https://logging.apache.org/xml/ns"
+               xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+               xsi:schemaLocation="
+                   https://logging.apache.org/xml/ns
+                   https://logging.apache.org/xml/ns/log4j-config-2.xsd">
+    <Appenders>
+        <Console name="CONSOLE" target="SYSTEM_OUT">
+            <PatternLayout
+                    disableAnsi="false"
+                    pattern="%d{HH:mm:ss.SSS} %highlight{%-5p} [%-15.15thread] %-15.15logger{20} -- %highlight{%m}%n"
+            />
+        </Console>
+    </Appenders>
+
+    <Loggers>
+        <!-- Log everything starting with level INFO to CONSOLE appender -->
+        <Root level="INFO">
+            <AppenderRef ref="CONSOLE"/>
+        </Root>
+
+        <!-- Log messages from our packages starting with level TRACE -->
+        <Logger name="ru.urfu" level="TRACE"/>
+
+        <!-- Log messages from Telegram packages starting with level INFO -->
+        <Logger name="org.telegram" level="INFO"/>
+    </Loggers>
+</Configuration>

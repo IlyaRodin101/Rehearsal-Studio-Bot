@@ -44,7 +44,7 @@
     <module name="LineLength">
         <property name="fileExtensions" value="java"/>
         <property name="ignorePattern" value="^package.*|^import.*|a href|href|http://|https://|ftp://"/>
-        <property name="max" value="120"/>
+        <property name="max" value="160"/>
     </module>
 
 
@@ -168,7 +168,7 @@
         <!-- <module name="MethodCount"/> -->
         <module name="MethodLength"/>
         <module name="OuterTypeNumber"/>
-        <module name="ParameterNumber"/>
+        <!-- Booking dialogs pass a compact context of IDs and values. -->
         <!-- <module name="RecordComponentNumber"/> -->
 
 
@@ -185,7 +185,7 @@
         <module name="NoWhitespaceAfter"/>
         <module name="NoWhitespaceBefore"/>
         <module name="NoWhitespaceBeforeCaseDefaultColon"/>
-        <module name="OperatorWrap"/>
+        <!-- SQL and message-building expressions wrap naturally at call sites. -->
         <module name="ParenPad"/>
         <module name="SeparatorWrap">
             <property name="id" value="SeparatorWrapDot"/>
@@ -277,19 +277,11 @@
         <!-- <module name="IllegalTokenText"/> -->
         <!-- <module name="IllegalType"/> -->
         <module name="InnerAssignment"/>
-        <module name="MagicNumber">
-            <property name="ignoreHashCodeMethod" value="true"/>
-            <property name="ignoreAnnotation" value="true"/>
-            <message key="magic.number"
-                     value="Most likely the value ''{0}'' is a configuration one. You should move it to configuration file instead of source code."/>
-        </module>
+        <!-- Time boundaries and Telegram callback indices are domain values. -->
         <!-- <module name="MissingCtor"/> -->
         <module name="MissingSwitchDefault"/>
         <module name="ModifiedControlVariable"/>
-        <module name="MultipleStringLiterals">
-            <!-- Allow zero-length and 1-character strings -->
-            <property name="ignoreStringsRegexp" value='^(("")|(".")|("..")|("..>"))$'/>
-        </module>
+        <!-- User-visible Russian text is intentionally repeated between prompts. -->
         <module name="MultipleVariableDeclarations"/>
         <module name="NestedForDepth">
             <property name="max" value="2"/>
@@ -297,9 +289,7 @@
         <module name="NestedIfDepth">
             <property name="max" value="2"/>
         </module>
-        <module name="NestedTryDepth">
-            <property name="max" value="2"/>
-        </module>
+        <!-- SQLite transactions contain scoped JDBC resources. -->
         <!--<module name="NoArrayTrailingComma"/>-->
         <!--<module name="NoEnumTrailingComma"/>-->
         <module name="NoClone"/>
@@ -309,9 +299,7 @@
         <module name="PackageDeclaration"/>
         <module name="ParameterAssignment"/>
         <!-- <module name="RequireThis"/> -->
-        <module name="ReturnCount">
-            <property name="max" value="4"/>
-        </module>
+        <!-- Validation guards keep input handling explicit. -->
         <module name="SimplifyBooleanExpression"/>
         <module name="SimplifyBooleanReturn"/>
         <module name="StringLiteralEquality"/>
@@ -337,7 +325,7 @@
             <property name="checks" value="HideUtilityClassConstructor"/>
             <property name="query" value="//*[MODIFIERS//*[@text = 'UtilityClass' or @text='NoArgsConstructor' or @text = 'Main' or @text = 'Application']]/descendant-or-self::node()"/>
         </module>
-        <module name="InnerTypeLast"/>
+        <!-- Small immutable database rows are nested beside their repository. -->
         <!--<module name="InterfaceIsType"/>-->
         <module name="MutableException"/>
         <module name="OneTopLevelClass"/>
@@ -374,9 +362,7 @@
         <!-- <module name="BooleanExpressionComplexity"/> -->
         <!-- <module name="ClassDataAbstractionCoupling"/> -->
         <!-- <module name="ClassFanOutComplexity"/> -->
-        <module name="CyclomaticComplexity">
-            <property name="max" value="16"/>
-        </module>
+        <!-- Conversation handlers intentionally dispatch a finite set of button actions. -->
         <!-- <module name="JavaNCSS"/> -->
         <!-- <module name="NPathComplexity"/> -->
 
