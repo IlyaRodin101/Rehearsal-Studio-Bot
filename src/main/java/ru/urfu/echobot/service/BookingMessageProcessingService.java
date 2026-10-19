@@ -24,10 +24,67 @@ public final class BookingMessageProcessingService implements MessageProcessingS
             "^(?:\\+7|8)[\\s()\\-]*(\\d{3})[\\s()\\-]*(\\d{3})[\\s()\\-]*(\\d{2})[\\s()\\-]*(\\d{2})$");
     private static final String[] DAY_NAMES = {"Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"};
     private static final Logger LOGGER = LoggerFactory.getLogger(BookingMessageProcessingService.class);
+
+    private enum Step {
+        MENU, ADD_NAME, ADD_ADDRESS, ADD_TIMEZONE, ADD_OPEN, ADD_CLOSE, ADD_ROOM_NAME,
+        ADD_ROOM_REQUIRED, ADD_ROOM_MORE, ADD_LEAD, ADD_EQUIPMENT,
+        EDIT_NAME, EDIT_ADDRESS, EDIT_TIMEZONE, EDIT_EQUIPMENT, EDIT_LEAD,
+        EDIT_ROOM_NAME, EDIT_ROOM_REQUIRED, EDIT_DAY_OPEN, EDIT_DAY_CLOSE,
+        BOOK_BASES, BOOK_ROOMS, BOOK_MONTH, BOOK_WEEK, BOOK_DAY, BOOK_TIME, BOOK_DURATION,
+        BOOK_NAME, BOOK_PHONE, BOOK_COMMENT, BOOK_CONFIRM
+    }
+
+    private static final class Flow {
+        Step step = Step.MENU;
+        final boolean owner;
+        String baseName;
+        String address;
+        String timezone;
+        String equipment;
+        int leadHours = 2;
+        int[][] schedule = new int[7][];
+        int dayIndex;
+        final List<String> roomNames = new ArrayList<String>();
+        final List<Boolean> roomCommentRequired = new ArrayList<Boolean>();
+        long baseId;
+        long roomId;
+        int editDay;
+        int editOpen;
+        String name;
+        String phone;
+        String comment;
+        YearMonth selectedMonth;
+        LocalDate selectedWeek;
+        LocalDate bookingDate;
+        int startHour;
+        int hours;
+        int monthOffset;
+        boolean creatingBase;
+
+        Flow(boolean owner) {
+            this.owner = owner;
+        }
+
+        void clearBooking() {
+            baseId = 0;
+            roomId = 0;
+            bookingDate = null;
+            startHour = 0;
+            hours = 0;
+            name = null;
+            phone = null;
+            comment = null;
+            selectedMonth = null;
+            selectedWeek = null;
+            monthOffset = 0;
+        }
+    }
+
     private final long ownerId;
     private final Database database;
-    private final Map<Long, Flow> flows = new ConcurrentHashMap<Long, Flow>();
     private volatile Bot transport;
+    private final Map<Long, Flow> flows = new ConcurrentHashMap<Long, Flow>();
+
     public BookingMessageProcessingService(long ownerId, Database database) {
         this.ownerId = ownerId;
         this.database = database;
@@ -185,192 +242,6 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         }
     }
 
-    private void handleSetupCallback(long chatId, Flow flow, String[] parts)
-            throws SQLException {
-        if ("open".equals(parts[1]) && flow.step == Step.ADD_OPEN) {
-            int open = Integer.parseInt(parts[2]);
-            flow.schedule[flow.dayIndex] = new int[]{open, -1};
-            flow.step = Step.ADD_CLOSE;
-            askClosingHour(chatId, flow);
-        } else if ("closed".equals(parts[1]) && flow.step == Step.ADD_OPEN) {
-            flow.schedule[flow.dayIndex] = null;
-            advanceSchedule(chatId, flow);
-        } else if ("close".equals(parts[1]) && flow.step == Step.ADD_CLOSE) {
-            flow.schedule[flow.dayIndex][1] = Integer.parseInt(parts[2]);
-            advanceSchedule(chatId, flow);
-        } else if ("required".equals(parts[1]) && flow.step == Step.ADD_ROOM_REQUIRED) {
-            boolean required = "yes".equals(parts[2]);
-            if (flow.creatingBase) {
-                flow.roomCommentRequired.add(required);
-                flow.step = Step.ADD_ROOM_MORE;
-                send(chatId, "Добавить ещё зал?", choices(
-                        button("Добавить", "setup:addroom"),
-                        button("Достаточно", "setup:roomsdone"),
-                        button(BACK, "back")));
-            } else {
-                database.addRoom(flow.baseId, flow.roomNames.get(0), required);
-                flow.roomNames.clear();
-                flow.step = Step.MENU;
-                showRooms(chatId, flow.baseId);
-            }
-        } else if ("addroom".equals(parts[1]) && flow.step == Step.ADD_ROOM_MORE) {
-            flow.step = Step.ADD_ROOM_NAME;
-            send(chatId, "Введите название зала.", backKeyboard());
-        } else if ("roomsdone".equals(parts[1]) && flow.step == Step.ADD_ROOM_MORE) {
-            askLeadHours(chatId, flow);
-        } else if ("lead".equals(parts[1]) && flow.step == Step.ADD_LEAD) {
-            flow.leadHours = Integer.parseInt(parts[2]);
-            flow.step = Step.ADD_EQUIPMENT;
-            send(chatId, "Введите список оборудования (можно оставить пустым).", backKeyboard());
-        } else if ("leadpage".equals(parts[1]) && flow.step == Step.ADD_LEAD) {
-            send(chatId, "За сколько часов до начала клиент ещё может бронировать?",
-                    leadKeyboard(0, Integer.parseInt(parts[2])));
-        }
-    }
-
-    private void handleOwnerCallback(long chatId, Flow flow, String[] parts)
-            throws SQLException {
-        if ("add".equals(parts[1])) {
-            resetSetup(flow);
-            flow.creatingBase = true;
-            flow.step = Step.ADD_NAME;
-            send(chatId, "Введите название базы.", backKeyboard());
-        } else if ("base".equals(parts[1])) {
-            flow.baseId = Long.parseLong(parts[2]);
-            sendBaseSettings(chatId, flow.baseId, null);
-        } else if ("list".equals(parts[1])) {
-            showBases(chatId);
-        } else if ("field".equals(parts[1])) {
-            flow.baseId = Long.parseLong(parts[2]);
-            String field = parts[3];
-            if ("schedule".equals(field)) {
-                showScheduleDays(chatId, flow.baseId);
-            } else if ("rooms".equals(field)) {
-                showRooms(chatId, flow.baseId);
-            } else if ("lead".equals(field)) {
-                flow.step = Step.EDIT_LEAD;
-                send(chatId, "За сколько часов до начала клиент ещё может бронировать?",
-                        leadKeyboard(flow.baseId, 0));
-            } else {
-                flow.step = "name".equals(field) ? Step.EDIT_NAME
-                        : "address".equals(field) ? Step.EDIT_ADDRESS
-                        : "timezone".equals(field) ? Step.EDIT_TIMEZONE : Step.EDIT_EQUIPMENT;
-                String prompt = "name".equals(field) ? "Введите новое название базы."
-                        : "address".equals(field) ? "Введите новый адрес."
-                        : "timezone".equals(field) ? "Введите часовой пояс, например Europe/Moscow."
-                        : "Введите список оборудования (можно оставить пустым).";
-                send(chatId, prompt, backKeyboard());
-            }
-        } else if ("leadpage".equals(parts[1]) && flow.step == Step.EDIT_LEAD) {
-            flow.baseId = Long.parseLong(parts[2]);
-            send(chatId, "За сколько часов до начала клиент ещё может бронировать?",
-                    leadKeyboard(flow.baseId, Integer.parseInt(parts[3])));
-        } else if ("lead".equals(parts[1])) {
-            if (flow.step != Step.EDIT_LEAD) {
-                return;
-            }
-            database.updateLeadHours(flow.baseId, Integer.parseInt(parts[3]));
-            flow.step = Step.MENU;
-            sendBaseSettings(chatId, flow.baseId, "Срок бронирования сохранён.");
-        } else if ("day".equals(parts[1])) {
-            flow.baseId = Long.parseLong(parts[2]);
-            flow.editDay = Integer.parseInt(parts[3]);
-            int[] hours = database.getOpeningHours(flow.baseId, flow.editDay);
-            String current = hours == null ? "выходной" : formatHour(hours[0]) + "-" + formatHour(hours[1]);
-            send(chatId, DAY_NAMES[flow.editDay - 1] + ": " + current + ". Что изменить?",
-                    choices(button("Час открытия", "owner:editopen:" + flow.baseId + ":" + flow.editDay),
-                            button("Час закрытия", "owner:editclose:" + flow.baseId + ":" + flow.editDay),
-                            button("Выходной", "owner:closed:" + flow.baseId + ":" + flow.editDay),
-                            button(BACK, "owner:field:" + flow.baseId + ":schedule")));
-        } else if ("editopen".equals(parts[1])) {
-            flow.baseId = Long.parseLong(parts[2]);
-            flow.editDay = Integer.parseInt(parts[3]);
-            flow.step = Step.EDIT_DAY_OPEN;
-            int[] hours = database.getOpeningHours(flow.baseId, flow.editDay);
-            flow.editOpen = hours == null ? 0 : hours[0];
-            List<List<Button>> rows = new ArrayList<List<Button>>();
-            for (int hour = 0; hour <= 23; hour++) {
-                addButton(rows, button(formatHour(hour), "owner:setopen:" + hour), 4);
-            }
-            rows.add(row(button(BACK, "owner:day:" + flow.baseId + ":" + flow.editDay)));
-            send(chatId, DAY_NAMES[flow.editDay - 1] + ". Новый час открытия:", markup(rows));
-        } else if ("setopen".equals(parts[1]) && flow.step == Step.EDIT_DAY_OPEN) {
-            int open = Integer.parseInt(parts[2]);
-            int[] current = database.getOpeningHours(flow.baseId, flow.editDay);
-            if (current != null && open < current[1]) {
-                database.updateScheduleDay(flow.baseId, flow.editDay, new int[]{open, current[1]});
-                flow.step = Step.MENU;
-                sendBaseSettings(chatId, flow.baseId, "График сохранён.");
-            } else {
-                flow.editOpen = open;
-                flow.step = Step.EDIT_DAY_CLOSE;
-                askEditClosingHour(chatId, flow);
-            }
-        } else if ("editclose".equals(parts[1])) {
-            flow.baseId = Long.parseLong(parts[2]);
-            flow.editDay = Integer.parseInt(parts[3]);
-            flow.step = Step.EDIT_DAY_CLOSE;
-            int[] hours = database.getOpeningHours(flow.baseId, flow.editDay);
-            flow.editOpen = hours == null ? 0 : hours[0];
-            askEditClosingHour(chatId, flow);
-        } else if ("setclose".equals(parts[1]) && flow.step == Step.EDIT_DAY_CLOSE) {
-            database.updateScheduleDay(flow.baseId, flow.editDay,
-                    new int[]{flow.editOpen, Integer.parseInt(parts[2])});
-            flow.step = Step.MENU;
-            sendBaseSettings(chatId, flow.baseId, "График сохранён.");
-        } else if ("closed".equals(parts[1])) {
-            flow.baseId = Long.parseLong(parts[2]);
-            int day = Integer.parseInt(parts[3]);
-            database.updateScheduleDay(flow.baseId, day, null);
-            flow.step = Step.MENU;
-            sendBaseSettings(chatId, flow.baseId, "График сохранён.");
-        } else if ("room".equals(parts[1])) {
-            flow.baseId = Long.parseLong(parts[2]);
-            flow.roomId = Long.parseLong(parts[3]);
-            Database.Room room = database.getRoom(flow.roomId);
-            if (room != null) {
-                flow.step = Step.MENU;
-                send(chatId, "Зал «" + room.name + "». Что изменить?",
-                        choices(button("Название", "owner:renameroom:" + flow.baseId + ":" + flow.roomId),
-                                button("Обязательность комментария: " + (room.commentRequired ? "Да" : "Нет"),
-                                        "owner:togglecomment:" + flow.roomId + ":" + (!room.commentRequired)),
-                                button("Удалить зал", "owner:removeroom:" + flow.baseId + ":" + flow.roomId),
-                                button("Назад", "owner:field:" + flow.baseId + ":rooms")));
-            }
-        } else if ("renameroom".equals(parts[1])) {
-            flow.baseId = Long.parseLong(parts[2]);
-            flow.roomId = Long.parseLong(parts[3]);
-            Database.Room room = database.getRoom(flow.roomId);
-            if (room != null) {
-                flow.baseName = room.name;
-                flow.step = Step.EDIT_ROOM_NAME;
-                send(chatId, "Введите новое название зала.", backKeyboard());
-            }
-        } else if ("togglecomment".equals(parts[1])) {
-            long roomId = Long.parseLong(parts[2]);
-            boolean required = Boolean.parseBoolean(parts[3]);
-            Database.Room room = database.getRoom(roomId);
-            if (room != null) {
-                flow.roomId = roomId;
-                flow.baseId = room.baseId;
-                database.updateRoom(roomId, room.name, required);
-                showRooms(chatId, flow.baseId);
-            }
-        } else if ("removeroom".equals(parts[1])) {
-            flow.baseId = Long.parseLong(parts[2]);
-            database.deactivateRoom(Long.parseLong(parts[3]));
-            showRooms(chatId, flow.baseId);
-        } else if ("newroom".equals(parts[1])) {
-            flow.baseId = Long.parseLong(parts[2]);
-            flow.creatingBase = false;
-            flow.roomNames.clear();
-            flow.step = Step.ADD_ROOM_NAME;
-            send(chatId, "Введите название нового зала.", backKeyboard());
-        } else if ("schedule".equals(parts[1])) {
-            showScheduleDays(chatId, Long.parseLong(parts[2]));
-        }
-    }
-
     /// Обрабатывает нажатие кнопки главного меню.
     ///
     /// @param chatId id чата пользователя
@@ -393,7 +264,6 @@ public final class BookingMessageProcessingService implements MessageProcessingS
                 showMainMenu(chatId, flow.owner);
         }
     }
-
     private void handleBookingCallback(long chatId, long userId, Flow flow, String[] parts)
             throws SQLException {
         if ("base".equals(parts[1])) {
@@ -682,137 +552,6 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         send(chatId, text.toString(), choices(button(BACK, "about:list")));
     }
 
-    private void showBases(long chatId) throws SQLException {
-        List<Database.Base> bases = database.getBases();
-        List<List<Button>> rows = new ArrayList<List<Button>>();
-        for (Database.Base base : bases) {
-            addButton(rows, button(base.name, "owner:base:" + base.id), 2);
-        }
-        rows.add(row(button("Добавить базу", "owner:add")));
-        rows.add(row(button(BACK, "menu:home")));
-        send(chatId, bases.isEmpty() ? "Ваших баз пока нет." : "Ваши базы:", markup(rows));
-    }
-
-    private void sendBaseSettings(long chatId, long baseId, String notice)
-            throws SQLException {
-        Database.Base base = database.getBase(baseId);
-        if (base == null) {
-            showBases(chatId);
-            return;
-        }
-        String text = (notice == null ? "" : notice + "\n") + "База «" + base.name + "». Что изменить?";
-        send(chatId, text, choices(button("Название", "owner:field:" + base.id + ":name"),
-                button("Адрес", "owner:field:" + base.id + ":address"),
-                button("Часовой пояс", "owner:field:" + base.id + ":timezone"),
-                button("График работы", "owner:field:" + base.id + ":schedule"),
-                button("Залы", "owner:field:" + base.id + ":rooms"),
-                button("Срок бронирования", "owner:field:" + base.id + ":lead"),
-                button("Оборудование", "owner:field:" + base.id + ":equipment"),
-                button(BACK, "owner:list")));
-    }
-
-    private void showScheduleDays(long chatId, long baseId) throws SQLException {
-        List<List<Button>> rows = new ArrayList<List<Button>>();
-        for (int day = 1; day <= 7; day++) {
-            int[] hours = database.getOpeningHours(baseId, day);
-            String label = DAY_NAMES[day - 1] + " " + (hours == null ? "выходной"
-                    : formatHour(hours[0]) + "-" + formatHour(hours[1]));
-            addButton(rows, button(label, "owner:day:" + baseId + ":" + day), 2);
-        }
-        rows.add(row(button(BACK, "owner:base:" + baseId)));
-        send(chatId, "Выберите день недели:", markup(rows));
-    }
-
-    private void showRooms(long chatId, long baseId) throws SQLException {
-        List<List<Button>> rows = new ArrayList<List<Button>>();
-        for (Database.Room room : database.getRooms(baseId)) {
-            addButton(rows, button(room.name, "owner:room:" + baseId + ":" + room.id), 2);
-        }
-        rows.add(row(button("Добавить зал", "owner:newroom:" + baseId)));
-        rows.add(row(button(BACK, "owner:base:" + baseId)));
-        send(chatId, "Залы базы:", markup(rows));
-    }
-
-    private void saveNewBase(long chatId, Flow flow) throws SQLException {
-        int[][] schedule = new int[7][];
-        for (int i = 0; i < 7; i++) {
-            schedule[i] = flow.schedule[i] == null ? null : flow.schedule[i].clone();
-        }
-        boolean[] required = new boolean[flow.roomCommentRequired.size()];
-        for (int i = 0; i < required.length; i++) {
-            required[i] = flow.roomCommentRequired.get(i);
-        }
-        database.createBase(flow.baseName, flow.address, flow.timezone, flow.leadHours,
-                flow.equipment == null ? "" : flow.equipment, schedule, flow.roomNames, required);
-        String createdName = flow.baseName;
-        flow.step = Step.MENU;
-        flow.creatingBase = false;
-        flow.clearBooking();
-        send(chatId, "База «" + createdName + "» создана.", null);
-        showBases(chatId);
-    }
-
-    private void saveEditedText(long chatId, Flow flow, String text) throws SQLException {
-        if (flow.step == Step.EDIT_TIMEZONE && !validZone(text)) {
-            send(chatId, "Не удалось распознать часовой пояс. Введите, например, Europe/Moscow.", backKeyboard());
-            return;
-        }
-        if ((flow.step == Step.EDIT_NAME || flow.step == Step.EDIT_ADDRESS) && text.isEmpty()) {
-            send(chatId, "Значение не должно быть пустым. Введите ещё раз.", backKeyboard());
-            return;
-        }
-        String field = flow.step == Step.EDIT_NAME ? "name"
-                : flow.step == Step.EDIT_ADDRESS ? "address"
-                : flow.step == Step.EDIT_TIMEZONE ? "timezone" : "equipment";
-        database.updateBaseField(flow.baseId, field, text);
-        flow.step = Step.MENU;
-        sendBaseSettings(chatId, flow.baseId, "Изменения сохранены.");
-    }
-
-    private void askOpeningHour(long chatId, Flow flow) {
-        flow.step = Step.ADD_OPEN;
-        List<List<Button>> rows = new ArrayList<List<Button>>();
-        for (int hour = 0; hour <= 23; hour++) {
-            addButton(rows, button(formatHour(hour), "setup:open:" + hour), 4);
-        }
-        rows.add(row(button("Выходной", "setup:closed"), button(BACK, "back")));
-        send(chatId, DAY_NAMES[flow.dayIndex] + ". Час открытия:", markup(rows));
-    }
-
-    private void askClosingHour(long chatId, Flow flow) {
-        List<List<Button>> rows = new ArrayList<List<Button>>();
-        int open = flow.schedule[flow.dayIndex][0];
-        for (int hour = open + 1; hour <= 24; hour++) {
-            addButton(rows, button(formatHour(hour), "setup:close:" + hour), 4);
-        }
-        rows.add(row(button(BACK, "back")));
-        send(chatId, DAY_NAMES[flow.dayIndex] + ". Час закрытия:", markup(rows));
-    }
-
-    private void advanceSchedule(long chatId, Flow flow) {
-        flow.dayIndex++;
-        if (flow.dayIndex < 7) {
-            askOpeningHour(chatId, flow);
-        } else {
-            flow.step = Step.ADD_ROOM_NAME;
-            send(chatId, "Введите название первого зала.", backKeyboard());
-        }
-    }
-
-    private void askLeadHours(long chatId, Flow flow) {
-        flow.step = Step.ADD_LEAD;
-        send(chatId, "За сколько часов до начала клиент ещё может бронировать?", leadKeyboard(0, 0));
-    }
-
-    private void askEditClosingHour(long chatId, Flow flow) {
-        List<List<Button>> rows = new ArrayList<List<Button>>();
-        for (int hour = flow.editOpen + 1; hour <= 24; hour++) {
-            addButton(rows, button(formatHour(hour), "owner:setclose:" + hour), 4);
-        }
-        rows.add(row(button(BACK, "owner:day:" + flow.baseId + ":" + flow.editDay)));
-        send(chatId, DAY_NAMES[flow.editDay - 1] + ". Новый час закрытия:", markup(rows));
-    }
-
     private boolean monthHasAvailability(Database.Base base, long roomId, YearMonth month)
             throws SQLException {
         return rangeHasAvailability(base, roomId, month.atDay(1), month.atEndOfMonth());
@@ -926,14 +665,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         send(chatId, "Здравствуйте! Что хотите сделать?", rows);
     }
 
-    private void showMainMenu(long chatId, boolean owner, String notice) {
-        showMainMenu(chatId, owner);
-        if (notice != null) {
-            send(chatId, notice, null);
-        }
-    }
-
-    private void sendMainMenu(long chatId, long userId, String notice) {
+    private void sendMainMenu(long chatId, long userId, String notice)  {
         send(chatId, notice, null);
         showMainMenu(chatId, flow(userId).owner);
     }
@@ -946,28 +678,6 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         Flow created = new Flow(userId == ownerId);
         Flow previous = flows.putIfAbsent(userId, created);
         return previous == null ? created : previous;
-    }
-
-    private void resetSetup(Flow flow) {
-        flow.creatingBase = true;
-        flow.baseName = null;
-        flow.address = null;
-        flow.timezone = null;
-        flow.equipment = null;
-        flow.leadHours = 2;
-        flow.schedule = new int[7][];
-        flow.dayIndex = 0;
-        flow.roomNames.clear();
-        flow.roomCommentRequired.clear();
-    }
-
-    private boolean validZone(String timezone) {
-        try {
-            ZoneId.of(timezone);
-            return true;
-        } catch (java.time.DateTimeException ex) {
-            return false;
-        }
     }
 
     private String normalizeRussianPhone(String input) {
@@ -1022,35 +732,6 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         return choices(button(BACK, "back"));
     }
 
-    private List<List<Button>> leadKeyboard(long baseId, int offset) {
-        List<List<Button>> rows = new ArrayList<List<Button>>();
-        int firstHour = Math.max(1, offset + 1);
-        int lastHour = (int) Math.min(Integer.MAX_VALUE, (long) offset + 24);
-        for (long hours = firstHour; hours <= lastHour; hours++) {
-            String callback = baseId == 0
-                    ? "setup:lead:" + hours
-                    : "owner:lead:" + baseId + ":" + hours;
-            addButton(rows, button(String.valueOf(hours), callback), 6);
-        }
-        List<Button> navigation = new ArrayList<Button>();
-        if (offset > 0) {
-            int previous = Math.max(0, offset - 24);
-            navigation.add(button("Предыдущие", baseId == 0
-                    ? "setup:leadpage:" + previous
-                    : "owner:leadpage:" + baseId + ":" + previous));
-        }
-        if (lastHour < Integer.MAX_VALUE) {
-            navigation.add(button("Следующие", baseId == 0
-                    ? "setup:leadpage:" + lastHour
-                    : "owner:leadpage:" + baseId + ":" + lastHour));
-        }
-        if (!navigation.isEmpty()) {
-            rows.add(navigation);
-        }
-        rows.add(row(button(BACK, baseId == 0 ? "back" : "owner:base:" + baseId)));
-        return markup(rows);
-    }
-
     private Button button(String text, String callback) {
         return new Button(text, callback);
     }
@@ -1068,60 +749,5 @@ public final class BookingMessageProcessingService implements MessageProcessingS
 
     private List<List<Button>> markup(List<List<Button>> rows) {
         return rows;
-    }
-
-    private enum Step {
-        MENU, ADD_NAME, ADD_ADDRESS, ADD_TIMEZONE, ADD_OPEN, ADD_CLOSE, ADD_ROOM_NAME,
-        ADD_ROOM_REQUIRED, ADD_ROOM_MORE, ADD_LEAD, ADD_EQUIPMENT,
-        EDIT_NAME, EDIT_ADDRESS, EDIT_TIMEZONE, EDIT_EQUIPMENT, EDIT_LEAD,
-        EDIT_ROOM_NAME, EDIT_ROOM_REQUIRED, EDIT_DAY_OPEN, EDIT_DAY_CLOSE,
-        BOOK_BASES, BOOK_ROOMS, BOOK_MONTH, BOOK_WEEK, BOOK_DAY, BOOK_TIME, BOOK_DURATION,
-        BOOK_NAME, BOOK_PHONE, BOOK_COMMENT, BOOK_CONFIRM
-    }
-
-    private static final class Flow {
-        final boolean owner;
-        final List<String> roomNames = new ArrayList<String>();
-        final List<Boolean> roomCommentRequired = new ArrayList<Boolean>();
-        Step step = Step.MENU;
-        String baseName;
-        String address;
-        String timezone;
-        String equipment;
-        int leadHours = 2;
-        int[][] schedule = new int[7][];
-        int dayIndex;
-        long baseId;
-        long roomId;
-        int editDay;
-        int editOpen;
-        String name;
-        String phone;
-        String comment;
-        YearMonth selectedMonth;
-        LocalDate selectedWeek;
-        LocalDate bookingDate;
-        int startHour;
-        int hours;
-        int monthOffset;
-        boolean creatingBase;
-
-        Flow(boolean owner) {
-            this.owner = owner;
-        }
-
-        void clearBooking() {
-            baseId = 0;
-            roomId = 0;
-            bookingDate = null;
-            startHour = 0;
-            hours = 0;
-            name = null;
-            phone = null;
-            comment = null;
-            selectedMonth = null;
-            selectedWeek = null;
-            monthOffset = 0;
-        }
     }
 }
