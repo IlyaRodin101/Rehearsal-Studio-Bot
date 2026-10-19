@@ -32,7 +32,6 @@ public final class BookingMessageProcessingService implements MessageProcessingS
 
     private static final class Flow {
         Step step = Step.MENU;
-        final boolean owner;
         long baseId;
         long roomId;
         String name;
@@ -45,9 +44,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         int hours;
         int monthOffset;
 
-        Flow(boolean owner) {
-            this.owner = owner;
-        }
+        Flow() {}
 
         void clearBooking() {
             baseId = 0;
@@ -64,13 +61,11 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         }
     }
 
-    private final long ownerId;
     private final Database database;
     private volatile Bot transport;
     private final Map<Long, Flow> flows = new ConcurrentHashMap<Long, Flow>();
 
-    public BookingMessageProcessingService(long ownerId, Database database) {
-        this.ownerId = ownerId;
+    public BookingMessageProcessingService(Database database) {
         this.database = database;
     }
 
@@ -97,7 +92,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         if (text.equals("/start") || text.equals("/menu")) {
             flow.step = Step.MENU;
             flow.clearBooking();
-            showMainMenu(chatId, flow.owner);
+            showMainMenu(chatId);
             return;
         }
         if (flow.step == Step.MENU) {
@@ -138,7 +133,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
                 showBookingConfirmation(chatId, flow);
                 break;
             default:
-                showMainMenu(chatId, flow.owner);
+                showMainMenu(chatId);
         }
     }
 
@@ -184,7 +179,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
             default:
                 flow.step = Step.MENU;
                 flow.clearBooking();
-                showMainMenu(chatId, flow.owner);
+                showMainMenu(chatId);
         }
     }
     private void handleBookingCallback(long chatId, long userId, Flow flow, String[] parts)
@@ -232,7 +227,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
             if (created) {
                 flow.clearBooking();
                 flow.step = Step.MENU;
-                sendMainMenu(chatId, userId, "Готово, запись создана.");
+                sendMainMenu(chatId, "Готово, запись создана.");
             } else {
                 flow.clearBooking();
                 flow.step = Step.MENU;
@@ -243,7 +238,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         } else if ("cancel".equals(parts[1])) {
             flow.step = Step.MENU;
             flow.clearBooking();
-            showMainMenu(chatId, flow.owner);
+            showMainMenu(chatId);
         }
     }
 
@@ -430,7 +425,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
     private void showMyBookings(long chatId, long userId) throws SQLException {
         List<Database.Booking> bookings = database.getUpcomingBookings(userId);
         if (bookings.isEmpty()) {
-            sendMainMenu(chatId, userId, "У вас пока нет будущих записей.");
+            sendMainMenu(chatId, "У вас пока нет будущих записей.");
             return;
         }
         StringBuilder text = new StringBuilder("Ваши будущие записи:\n");
@@ -440,7 +435,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
                     .append(formatDateTime(booking.start)).append("-").append(formatEnd(booking.start, end))
                     .append("\n");
         }
-        sendMainMenu(chatId, userId, text.toString());
+        sendMainMenu(chatId, text.toString());
     }
 
     private void showAboutBases(long chatId) throws SQLException {
@@ -521,7 +516,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
             case MENU:
                 flow.clearBooking();
                 flow.step = Step.MENU;
-                showMainMenu(chatId, flow.owner);
+                showMainMenu(chatId);
                 break;
             case BOOK_ROOMS:
                 beginBooking(chatId, flow);
@@ -567,30 +562,24 @@ public final class BookingMessageProcessingService implements MessageProcessingS
                 break;
             default:
                 flow.step = Step.MENU;
-                showMainMenu(chatId, flow.owner);
+                showMainMenu(chatId);
         }
     }
 
-    private void showMainMenu(long chatId, boolean owner) {
+    private void showMainMenu(long chatId) {
         List<List<Button>> rows = new ArrayList<List<Button>>();
         rows.add(row(button("Забронировать", "menu:book"), button("Мои записи", "menu:mine")));
         rows.add(row(button("О базе", "menu:about")));
         send(chatId, "Здравствуйте! Что хотите сделать?", rows);
     }
 
-    private void sendMainMenu(long chatId, long userId, String notice)  {
+    private void sendMainMenu(long chatId, String notice)  {
         send(chatId, notice, null);
-        showMainMenu(chatId, flow(userId).owner);
+        showMainMenu(chatId);
     }
 
     private Flow flow(long userId) {
-        Flow current = flows.get(userId);
-        if (current != null) {
-            return current;
-        }
-        Flow created = new Flow(userId == ownerId);
-        Flow previous = flows.putIfAbsent(userId, created);
-        return previous == null ? created : previous;
+        return flows.computeIfAbsent(userId, id -> new Flow());
     }
 
     private String normalizeRussianPhone(String input) {

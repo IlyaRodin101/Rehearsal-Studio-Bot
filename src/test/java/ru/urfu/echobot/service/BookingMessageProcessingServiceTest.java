@@ -11,8 +11,6 @@ import ru.urfu.echobot.bot.DummyBot;
 
 /// Тесты диалогов бронирования без Telegram.
 final class BookingMessageProcessingServiceTest {
-    /// Идентификатор владельца в тестах.
-    private static final long OWNER_ID = 1L;
     /// Идентификатор обычного клиента в тестах.
     private static final long CLIENT_ID = 2L;
 
@@ -31,7 +29,7 @@ final class BookingMessageProcessingServiceTest {
     void setUp() throws Exception {
         Database database = new Database(tempDir.resolve("test.db").toString());
         database.initialize();
-        service = new BookingMessageProcessingService(OWNER_ID, database);
+        service = new BookingMessageProcessingService(database);
         bot = new DummyBot();
     }
 
