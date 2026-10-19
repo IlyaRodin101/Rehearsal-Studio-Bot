@@ -11,7 +11,6 @@ import ru.urfu.echobot.service.MessageProcessingService;
 final public class Main {
     private static final Logger LOGGER = LoggerFactory.getLogger(Main.class);
     private static final String TELEGRAM_TOKEN = "TELEGRAM_TOKEN";
-    private static final String OWNER_ID = "OWNER_ID";
     private static final String DATABASE_PATH = "DATABASE_PATH";
     private static final String DEFAULT_DATABASE_PATH = "database.db";
 
@@ -23,16 +22,8 @@ final public class Main {
     /// Точка входа в программу.
     static void main() {
         final String tgBotToken = System.getenv(TELEGRAM_TOKEN);
-        final String ownerIdText = System.getenv(OWNER_ID);
-        if (tgBotToken == null || ownerIdText == null) {
-            LOGGER.error("Set environment variables {} and {}", TELEGRAM_TOKEN, OWNER_ID);
-            return;
-        }
-        final long ownerId;
-        try {
-            ownerId = Long.parseLong(ownerIdText.trim());
-        } catch (NumberFormatException e) {
-            LOGGER.error("{} must be a number", OWNER_ID, e);
+        if (tgBotToken == null) {
+            LOGGER.error("Set environment variable {}", TELEGRAM_TOKEN);
             return;
         }
         final String databasePath = System.getenv(DATABASE_PATH) == null || System.getenv(DATABASE_PATH).isBlank()
@@ -42,7 +33,7 @@ final public class Main {
         try {
             final Database database = new Database(databasePath);
             database.initialize();
-            final MessageProcessingService service = new BookingMessageProcessingService(ownerId, database);
+            final MessageProcessingService service = new BookingMessageProcessingService(database);
             try (TelegramBot bot = new TelegramBot(tgBotToken, service)) {
                 bot.start();
             }
