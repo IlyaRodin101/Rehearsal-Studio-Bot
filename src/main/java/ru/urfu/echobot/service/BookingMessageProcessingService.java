@@ -176,36 +176,6 @@ public final class BookingMessageProcessingService implements MessageProcessingS
             handleMenuAction(chatId, flow, parts[1]);
             return;
         }
-        if ("setup".equals(action)) {
-            if (!flow.owner) {
-                send(chatId, "Эта команда доступна только владельцу.", null);
-                return;
-            }
-            handleSetupCallback(chatId, flow, parts);
-            return;
-        }
-        if ("owner".equals(action)) {
-            if (!flow.owner) {
-                send(chatId, "Эта команда доступна только владельцу.", null);
-                return;
-            }
-            handleOwnerCallback(chatId, flow, parts);
-            return;
-        }
-        if ("roomreq".equals(action)) {
-            if (!flow.owner) {
-                send(chatId, "Эта команда доступна только владельцу.", null);
-                return;
-            }
-            boolean required = "yes".equals(parts[1]);
-            if (flow.step != Step.EDIT_ROOM_REQUIRED) {
-                return;
-            }
-            database.updateRoom(flow.roomId, flow.baseName, required);
-            flow.step = Step.MENU;
-            sendBaseSettings(chatId, flow.baseId, "Настройки зала сохранены.");
-            return;
-        }
         if ("book".equals(action)) {
             handleBookingCallback(chatId, userId, flow, parts);
             return;
@@ -416,11 +386,6 @@ public final class BookingMessageProcessingService implements MessageProcessingS
                 break;
             case "about":
                 showAboutBases(chatId);
-                break;
-            case "bases":
-                if (flow.owner) {
-                    showBases(chatId);
-                }
                 break;
             default:
                 flow.step = Step.MENU;
@@ -957,11 +922,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
     private void showMainMenu(long chatId, boolean owner) {
         List<List<Button>> rows = new ArrayList<List<Button>>();
         rows.add(row(button("Забронировать", "menu:book"), button("Мои записи", "menu:mine")));
-        if (owner) {
-            rows.add(row(button("О базе", "menu:about"), button("Базы", "menu:bases")));
-        } else {
-            rows.add(row(button("О базе", "menu:about")));
-        }
+        rows.add(row(button("О базе", "menu:about")));
         send(chatId, "Здравствуйте! Что хотите сделать?", rows);
     }
 

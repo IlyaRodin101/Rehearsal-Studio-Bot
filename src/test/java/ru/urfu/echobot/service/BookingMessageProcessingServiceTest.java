@@ -1,15 +1,13 @@
 package ru.urfu.echobot.service;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+import java.nio.file.Path;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import ru.urfu.echobot.bot.DummyBot;
-
-import java.nio.file.Path;
-import java.util.List;
-
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /// Тесты диалогов бронирования без Telegram.
 final class BookingMessageProcessingServiceTest {
@@ -37,20 +35,12 @@ final class BookingMessageProcessingServiceTest {
         bot = new DummyBot();
     }
 
-    /// Given: пишет владелец. When: отправляет /start. Then: в меню есть кнопка «Базы».
+    /// Given: пишет любой пользователь. When: отправляет /start. Then: в меню три кнопки.
     @Test
-    void startShowsBasesButtonToOwner() {
-        service.processMessage(Message.builder().text("/start").build(), OWNER_ID, bot);
-
-        assertTrue(buttonTexts(bot.lastMessage()).contains("Базы"));
-    }
-
-    /// Given: пишет обычный клиент. When: отправляет /start. Then: кнопки «Базы» нет.
-    @Test
-    void startHidesBasesButtonFromClient() {
+    void startShowsMainMenuButtons() {
         service.processMessage(Message.builder().text("/start").build(), CLIENT_ID, bot);
 
-        assertFalse(buttonTexts(bot.lastMessage()).contains("Базы"));
+        assertEquals(List.of("Забронировать", "Мои записи", "О базе"), buttonTexts(bot.lastMessage()));
     }
 
     /// Собирает подписи всех кнопок сообщения в один список.
