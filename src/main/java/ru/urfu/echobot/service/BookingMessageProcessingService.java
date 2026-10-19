@@ -19,20 +19,12 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-import org.telegram.telegrambots.meta.api.methods.AnswerCallbackQuery;
-import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
-import org.telegram.telegrambots.meta.api.objects.Update;
-import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
-import org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboardMarkup;
-import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
-import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.KeyboardRow;
-import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
+import org.jetbrains.annotations.NotNull;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import ru.urfu.echobot.bot.Bot;
 
 public final class BookingMessageProcessingService implements MessageProcessingService {
-    private static final Logger LOGGER = LogManager.getLogger(BookingMessageProcessingService.class);
     private static final Locale RU = new Locale("ru", "RU");
     private static final String BACK = "Назад";
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("d MMM", RU);
@@ -40,6 +32,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
     private static final Pattern RUSSIAN_PHONE = Pattern.compile(
             "^(?:\\+7|8)[\\s()\\-]*(\\d{3})[\\s()\\-]*(\\d{3})[\\s()\\-]*(\\d{2})[\\s()\\-]*(\\d{2})$");
     private static final String[] DAY_NAMES = {"Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"};
+    private static final Logger LOGGER = LoggerFactory.getLogger(BookingMessageProcessingService.class);
 
     private enum Step {
         MENU, ADD_NAME, ADD_ADDRESS, ADD_TIMEZONE, ADD_OPEN, ADD_CLOSE, ADD_ROOM_NAME,
@@ -107,32 +100,23 @@ public final class BookingMessageProcessingService implements MessageProcessingS
     }
 
     @Override
-    public void processUpdate(Update update, Bot bot) {
+    public void processMessage(@NotNull Message msg, long chatId, @NotNull Bot bot) {
         transport = bot;
         try {
-            if (update.hasCallbackQuery()) {
-                handleCallback(update.getCallbackQuery());
-            } else if (update.hasMessage() && update.getMessage().hasText()) {
-                handleText(update.getMessage());
+            if (msg.buttonData() != null) {
+                handleCallback(msg.buttonData(), chatId);
+            } else if (msg.text() != null) {
+                handleText(msg.text(), chatId);
             }
-        } catch (SQLException | TelegramApiException ex) {
-            LOGGER.error("Ошибка при обработке обновления Telegram", ex);
-            long chatId = chatId(update);
-            if (chatId != 0) {
-                try {
-                    send(chatId, "Не удалось выполнить действие. Попробуйте ещё раз.", null);
-                } catch (TelegramApiException sendException) {
-                    LOGGER.error("Не удалось отправить сообщение об ошибке", sendException);
-                }
-            }
+        } catch (SQLException ex) {
+            LOGGER.error("Ошибка при обработке сообщения", ex);
+            send(chatId, "Не удалось выполнить действие. Попробуйте ещё раз.", null);
         }
     }
 
-    private void handleText(org.telegram.telegrambots.meta.api.objects.Message message)
-            throws SQLException, TelegramApiException {
-        long userId = message.getFrom().getId();
-        long chatId = message.getChatId();
-        String text = message.getText().trim();
+    private void handleText(String rawText, long chatId) throws SQLException {
+        long userId = chatId;
+        String text = rawText.trim();
         Flow flow = flow(userId);
 
         if (text.equals("/start") || text.equals("/menu")) {
@@ -142,15 +126,6 @@ public final class BookingMessageProcessingService implements MessageProcessingS
             return;
         }
         if (flow.step == Step.MENU) {
-            if ("Базы".equals(text) && flow.owner) {
-                showBases(chatId);
-            } else if ("Забронировать".equals(text)) {
-                beginBooking(chatId, flow);
-            } else if ("Мои записи".equals(text)) {
-                showMyBookings(chatId, userId);
-            } else if ("О базе".equals(text)) {
-                showAboutBases(chatId);
-            }
             return;
         }
         if (text.equals(BACK)) {
@@ -253,12 +228,10 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         }
     }
 
-    private void handleCallback(CallbackQuery query) throws SQLException, TelegramApiException {
-        answerCallback(query.getId());
-        long userId = query.getFrom().getId();
-        long chatId = query.getMessage().getChatId();
+    private void handleCallback(String data, long chatId) throws SQLException {
+        long userId = chatId;
         Flow flow = flow(userId);
-        String[] parts = query.getData().split(":");
+        String[] parts = data.split(":");
         String action = parts[0];
 
         if ("back".equals(action)) {
@@ -266,13 +239,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
             return;
         }
         if ("menu".equals(action)) {
-            if ("book".equals(parts[1])) {
-                beginBooking(chatId, flow);
-            } else {
-                flow.step = Step.MENU;
-                flow.clearBooking();
-                showMainMenu(chatId, flow.owner);
-            }
+            handleMenuAction(chatId, flow, parts[1]);
             return;
         }
         if ("setup".equals(action)) {
@@ -315,7 +282,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
     }
 
     private void handleSetupCallback(long chatId, Flow flow, String[] parts)
-            throws SQLException, TelegramApiException {
+            throws SQLException {
         if ("open".equals(parts[1]) && flow.step == Step.ADD_OPEN) {
             int open = Integer.parseInt(parts[2]);
             flow.schedule[flow.dayIndex] = new int[]{open, -1};
@@ -358,7 +325,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
     }
 
     private void handleOwnerCallback(long chatId, Flow flow, String[] parts)
-            throws SQLException, TelegramApiException {
+            throws SQLException {
         if ("add".equals(parts[1])) {
             resetSetup(flow);
             flow.creatingBase = true;
@@ -417,7 +384,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
             flow.step = Step.EDIT_DAY_OPEN;
             int[] hours = database.getOpeningHours(flow.baseId, flow.editDay);
             flow.editOpen = hours == null ? 0 : hours[0];
-            List<List<InlineKeyboardButton>> rows = new ArrayList<List<InlineKeyboardButton>>();
+            List<List<Button>> rows = new ArrayList<List<Button>>();
             for (int hour = 0; hour <= 23; hour++) {
                 addButton(rows, button(formatHour(hour), "owner:setopen:" + hour), 4);
             }
@@ -500,8 +467,35 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         }
     }
 
+    /// Обрабатывает нажатие кнопки главного меню.
+    ///
+    /// @param chatId id чата пользователя
+    /// @param flow   состояние диалога пользователя
+    /// @param item   код пункта меню
+    private void handleMenuAction(long chatId, Flow flow, String item) throws SQLException {
+        switch (item) {
+            case "book":
+                beginBooking(chatId, flow);
+                break;
+            case "mine":
+                showMyBookings(chatId, chatId);
+                break;
+            case "about":
+                showAboutBases(chatId);
+                break;
+            case "bases":
+                if (flow.owner) {
+                    showBases(chatId);
+                }
+                break;
+            default:
+                flow.step = Step.MENU;
+                flow.clearBooking();
+                showMainMenu(chatId, flow.owner);
+        }
+    }
     private void handleBookingCallback(long chatId, long userId, Flow flow, String[] parts)
-            throws SQLException, TelegramApiException {
+            throws SQLException {
         if ("base".equals(parts[1])) {
             flow.clearBooking();
             flow.baseId = Long.parseLong(parts[2]);
@@ -561,7 +555,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
     }
 
     private void handleAboutCallback(long chatId, Flow flow, String[] parts)
-            throws SQLException, TelegramApiException {
+            throws SQLException {
         if ("base".equals(parts[1])) {
             showBaseInformation(chatId, Long.parseLong(parts[2]));
         } else if ("list".equals(parts[1])) {
@@ -569,7 +563,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         }
     }
 
-    private void beginBooking(long chatId, Flow flow) throws SQLException, TelegramApiException {
+    private void beginBooking(long chatId, Flow flow) throws SQLException {
         flow.clearBooking();
         flow.step = Step.BOOK_BASES;
         List<Database.Base> bases = database.getBases();
@@ -577,7 +571,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
             send(chatId, "Пока нет доступных баз для бронирования.", choices(button(BACK, "menu:home")));
             return;
         }
-        List<List<InlineKeyboardButton>> rows = new ArrayList<List<InlineKeyboardButton>>();
+        List<List<Button>> rows = new ArrayList<List<Button>>();
         for (Database.Base base : bases) {
             addButton(rows, button(base.name, "book:base:" + base.id), 2);
         }
@@ -585,10 +579,10 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         send(chatId, "Выберите базу:", markup(rows));
     }
 
-    private void showRoomChoices(long chatId, Flow flow) throws SQLException, TelegramApiException {
+    private void showRoomChoices(long chatId, Flow flow) throws SQLException {
         flow.step = Step.BOOK_ROOMS;
         List<Database.Room> rooms = database.getRooms(flow.baseId);
-        List<List<InlineKeyboardButton>> rows = new ArrayList<List<InlineKeyboardButton>>();
+        List<List<Button>> rows = new ArrayList<List<Button>>();
         for (Database.Room room : rooms) {
             addButton(rows, button(room.name, "book:room:" + room.id), 2);
         }
@@ -600,7 +594,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         }
     }
 
-    private void showMonthChoices(long chatId, Flow flow) throws SQLException, TelegramApiException {
+    private void showMonthChoices(long chatId, Flow flow) throws SQLException {
         flow.step = Step.BOOK_MONTH;
         Database.Base base = database.getBase(flow.baseId);
         if (base == null) {
@@ -608,7 +602,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
             return;
         }
         YearMonth current = YearMonth.now(ZoneId.of(base.timezone));
-        List<List<InlineKeyboardButton>> rows = new ArrayList<List<InlineKeyboardButton>>();
+        List<List<Button>> rows = new ArrayList<List<Button>>();
         int count = 0;
         for (int offset = 0; offset < 6; offset++) {
             YearMonth month = current.plusMonths(flow.monthOffset + offset);
@@ -617,7 +611,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
                 count++;
             }
         }
-        List<InlineKeyboardButton> navigation = new ArrayList<InlineKeyboardButton>();
+        List<Button> navigation = new ArrayList<Button>();
         if (flow.monthOffset > 0) {
             navigation.add(button("Предыдущие", "book:months:" + Math.max(0, flow.monthOffset - 6)));
         }
@@ -632,12 +626,12 @@ public final class BookingMessageProcessingService implements MessageProcessingS
     }
 
     private void showWeekChoices(long chatId, Flow flow, YearMonth month)
-            throws SQLException, TelegramApiException {
+            throws SQLException {
         flow.step = Step.BOOK_WEEK;
         Database.Base base = database.getBase(flow.baseId);
         LocalDate cursor = month.atDay(1);
         int count = 0;
-        List<List<InlineKeyboardButton>> rows = new ArrayList<List<InlineKeyboardButton>>();
+        List<List<Button>> rows = new ArrayList<List<Button>>();
         while (cursor.getMonthValue() == month.getMonthValue()) {
             LocalDate end = cursor.with(TemporalAdjusters.nextOrSame(DayOfWeek.SUNDAY));
             if (end.isAfter(month.atEndOfMonth())) {
@@ -658,7 +652,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         }
     }
 
-    private void showDayChoices(long chatId, Flow flow) throws SQLException, TelegramApiException {
+    private void showDayChoices(long chatId, Flow flow) throws SQLException {
         flow.step = Step.BOOK_DAY;
         Database.Base base = database.getBase(flow.baseId);
         LocalDate start = flow.selectedWeek;
@@ -666,7 +660,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         if (end.getMonthValue() != start.getMonthValue()) {
             end = start.withDayOfMonth(start.lengthOfMonth());
         }
-        List<List<InlineKeyboardButton>> rows = new ArrayList<List<InlineKeyboardButton>>();
+        List<List<Button>> rows = new ArrayList<List<Button>>();
         for (LocalDate date = start; !date.isAfter(end); date = date.plusDays(1)) {
             if (dateHasAvailability(base, flow.roomId, date)) {
                 String label = date.getDayOfWeek().getDisplayName(TextStyle.SHORT, RU) + ", " + date.format(DATE);
@@ -677,11 +671,11 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         send(chatId, rows.size() == 1 ? "В этой неделе нет доступных дней." : "Выберите день:", markup(rows));
     }
 
-    private void showTimeChoices(long chatId, Flow flow) throws SQLException, TelegramApiException {
+    private void showTimeChoices(long chatId, Flow flow) throws SQLException {
         flow.step = Step.BOOK_TIME;
         Database.Base base = database.getBase(flow.baseId);
         Database.Room room = database.getRoom(flow.roomId);
-        List<List<InlineKeyboardButton>> rows = new ArrayList<List<InlineKeyboardButton>>();
+        List<List<Button>> rows = new ArrayList<List<Button>>();
         if (base != null && room != null) {
             for (int hour : availableStarts(base, room, flow.bookingDate)) {
                 addButton(rows, button(formatHour(hour), "book:time:" + flow.bookingDate + ":" + hour), 4);
@@ -691,11 +685,11 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         send(chatId, rows.size() == 1 ? "На этот день свободного времени нет." : "Выберите время начала:", markup(rows));
     }
 
-    private void showDurationChoices(long chatId, Flow flow) throws SQLException, TelegramApiException {
+    private void showDurationChoices(long chatId, Flow flow) throws SQLException {
         flow.step = Step.BOOK_DURATION;
         Database.Base base = database.getBase(flow.baseId);
         int[] hours = base == null ? null : database.getOpeningHours(base.id, flow.bookingDate.getDayOfWeek().getValue());
-        List<List<InlineKeyboardButton>> rows = new ArrayList<List<InlineKeyboardButton>>();
+        List<List<Button>> rows = new ArrayList<List<Button>>();
         if (hours != null) {
             LocalDateTime start = flow.bookingDate.atTime(flow.startHour, 0);
             for (int duration = 1; duration <= hours[1] - flow.startHour; duration++) {
@@ -708,7 +702,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         send(chatId, rows.size() == 1 ? "До закрытия или свободного времени зала осталось меньше часа." : "Сколько часов?", markup(rows));
     }
 
-    private void askBookingComment(long chatId, Flow flow) throws SQLException, TelegramApiException {
+    private void askBookingComment(long chatId, Flow flow) throws SQLException {
         Database.Room room = database.getRoom(flow.roomId);
         if (room == null) {
             beginBooking(chatId, flow);
@@ -721,7 +715,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         send(chatId, prompt, room.commentRequired ? backKeyboard() : commentKeyboard());
     }
 
-    private void showBookingConfirmation(long chatId, Flow flow) throws SQLException, TelegramApiException {
+    private void showBookingConfirmation(long chatId, Flow flow) throws SQLException {
         Database.Base base = database.getBase(flow.baseId);
         Database.Room room = database.getRoom(flow.roomId);
         if (base == null || room == null || (room.commentRequired && (flow.comment == null || flow.comment.isEmpty()))) {
@@ -740,7 +734,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
                 button(BACK, "back"), button("Отмена", "book:cancel")));
     }
 
-    private void showMyBookings(long chatId, long userId) throws SQLException, TelegramApiException {
+    private void showMyBookings(long chatId, long userId) throws SQLException {
         List<Database.Booking> bookings = database.getUpcomingBookings(userId);
         if (bookings.isEmpty()) {
             sendMainMenu(chatId, userId, "У вас пока нет будущих записей.");
@@ -756,13 +750,13 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         sendMainMenu(chatId, userId, text.toString());
     }
 
-    private void showAboutBases(long chatId) throws SQLException, TelegramApiException {
+    private void showAboutBases(long chatId) throws SQLException {
         List<Database.Base> bases = database.getBases();
         if (bases.isEmpty()) {
             send(chatId, "Пока нет доступных баз.", choices(button(BACK, "menu:home")));
             return;
         }
-        List<List<InlineKeyboardButton>> rows = new ArrayList<List<InlineKeyboardButton>>();
+        List<List<Button>> rows = new ArrayList<List<Button>>();
         for (Database.Base base : bases) {
             addButton(rows, button(base.name, "about:base:" + base.id), 2);
         }
@@ -770,7 +764,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         send(chatId, "Выберите базу:", markup(rows));
     }
 
-    private void showBaseInformation(long chatId, long baseId) throws SQLException, TelegramApiException {
+    private void showBaseInformation(long chatId, long baseId) throws SQLException {
         Database.Base base = database.getBase(baseId);
         if (base == null) {
             showAboutBases(chatId);
@@ -788,9 +782,9 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         send(chatId, text.toString(), choices(button(BACK, "about:list")));
     }
 
-    private void showBases(long chatId) throws SQLException, TelegramApiException {
+    private void showBases(long chatId) throws SQLException {
         List<Database.Base> bases = database.getBases();
-        List<List<InlineKeyboardButton>> rows = new ArrayList<List<InlineKeyboardButton>>();
+        List<List<Button>> rows = new ArrayList<List<Button>>();
         for (Database.Base base : bases) {
             addButton(rows, button(base.name, "owner:base:" + base.id), 2);
         }
@@ -800,7 +794,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
     }
 
     private void sendBaseSettings(long chatId, long baseId, String notice)
-            throws SQLException, TelegramApiException {
+            throws SQLException {
         Database.Base base = database.getBase(baseId);
         if (base == null) {
             showBases(chatId);
@@ -817,8 +811,8 @@ public final class BookingMessageProcessingService implements MessageProcessingS
                 button(BACK, "owner:list")));
     }
 
-    private void showScheduleDays(long chatId, long baseId) throws SQLException, TelegramApiException {
-        List<List<InlineKeyboardButton>> rows = new ArrayList<List<InlineKeyboardButton>>();
+    private void showScheduleDays(long chatId, long baseId) throws SQLException {
+        List<List<Button>> rows = new ArrayList<List<Button>>();
         for (int day = 1; day <= 7; day++) {
             int[] hours = database.getOpeningHours(baseId, day);
             String label = DAY_NAMES[day - 1] + " " + (hours == null ? "выходной"
@@ -829,8 +823,8 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         send(chatId, "Выберите день недели:", markup(rows));
     }
 
-    private void showRooms(long chatId, long baseId) throws SQLException, TelegramApiException {
-        List<List<InlineKeyboardButton>> rows = new ArrayList<List<InlineKeyboardButton>>();
+    private void showRooms(long chatId, long baseId) throws SQLException {
+        List<List<Button>> rows = new ArrayList<List<Button>>();
         for (Database.Room room : database.getRooms(baseId)) {
             addButton(rows, button(room.name, "owner:room:" + baseId + ":" + room.id), 2);
         }
@@ -839,7 +833,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         send(chatId, "Залы базы:", markup(rows));
     }
 
-    private void saveNewBase(long chatId, Flow flow) throws SQLException, TelegramApiException {
+    private void saveNewBase(long chatId, Flow flow) throws SQLException {
         int[][] schedule = new int[7][];
         for (int i = 0; i < 7; i++) {
             schedule[i] = flow.schedule[i] == null ? null : flow.schedule[i].clone();
@@ -858,7 +852,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         showBases(chatId);
     }
 
-    private void saveEditedText(long chatId, Flow flow, String text) throws SQLException, TelegramApiException {
+    private void saveEditedText(long chatId, Flow flow, String text) throws SQLException {
         if (flow.step == Step.EDIT_TIMEZONE && !validZone(text)) {
             send(chatId, "Не удалось распознать часовой пояс. Введите, например, Europe/Moscow.", backKeyboard());
             return;
@@ -875,9 +869,9 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         sendBaseSettings(chatId, flow.baseId, "Изменения сохранены.");
     }
 
-    private void askOpeningHour(long chatId, Flow flow) throws TelegramApiException {
+    private void askOpeningHour(long chatId, Flow flow)  {
         flow.step = Step.ADD_OPEN;
-        List<List<InlineKeyboardButton>> rows = new ArrayList<List<InlineKeyboardButton>>();
+        List<List<Button>> rows = new ArrayList<List<Button>>();
         for (int hour = 0; hour <= 23; hour++) {
             addButton(rows, button(formatHour(hour), "setup:open:" + hour), 4);
         }
@@ -885,8 +879,8 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         send(chatId, DAY_NAMES[flow.dayIndex] + ". Час открытия:", markup(rows));
     }
 
-    private void askClosingHour(long chatId, Flow flow) throws TelegramApiException {
-        List<List<InlineKeyboardButton>> rows = new ArrayList<List<InlineKeyboardButton>>();
+    private void askClosingHour(long chatId, Flow flow)  {
+        List<List<Button>> rows = new ArrayList<List<Button>>();
         int open = flow.schedule[flow.dayIndex][0];
         for (int hour = open + 1; hour <= 24; hour++) {
             addButton(rows, button(formatHour(hour), "setup:close:" + hour), 4);
@@ -895,7 +889,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         send(chatId, DAY_NAMES[flow.dayIndex] + ". Час закрытия:", markup(rows));
     }
 
-    private void advanceSchedule(long chatId, Flow flow) throws TelegramApiException {
+    private void advanceSchedule(long chatId, Flow flow)  {
         flow.dayIndex++;
         if (flow.dayIndex < 7) {
             askOpeningHour(chatId, flow);
@@ -905,13 +899,13 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         }
     }
 
-    private void askLeadHours(long chatId, Flow flow) throws TelegramApiException {
+    private void askLeadHours(long chatId, Flow flow)  {
         flow.step = Step.ADD_LEAD;
         send(chatId, "За сколько часов до начала клиент ещё может бронировать?", leadKeyboard(0, 0));
     }
 
-    private void askEditClosingHour(long chatId, Flow flow) throws TelegramApiException {
-        List<List<InlineKeyboardButton>> rows = new ArrayList<List<InlineKeyboardButton>>();
+    private void askEditClosingHour(long chatId, Flow flow)  {
+        List<List<Button>> rows = new ArrayList<List<Button>>();
         for (int hour = flow.editOpen + 1; hour <= 24; hour++) {
             addButton(rows, button(formatHour(hour), "owner:setclose:" + hour), 4);
         }
@@ -959,7 +953,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         return result;
     }
 
-    private void back(long chatId, Flow flow) throws SQLException, TelegramApiException {
+    private void back(long chatId, Flow flow) throws SQLException {
         if (flow.owner && flow.step != Step.MENU && !isBookingStep(flow.step)) {
             flow.step = Step.MENU;
             flow.clearBooking();
@@ -1025,32 +1019,25 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         return step.ordinal() >= Step.BOOK_BASES.ordinal();
     }
 
-    private void showMainMenu(long chatId, boolean owner) throws TelegramApiException {
-        List<KeyboardRow> rows = new ArrayList<KeyboardRow>();
-        KeyboardRow first = new KeyboardRow();
-        first.add("Забронировать");
-        first.add("Мои записи");
-        rows.add(first);
-        KeyboardRow second = new KeyboardRow();
-        second.add("О базе");
+    private void showMainMenu(long chatId, boolean owner) {
+        List<List<Button>> rows = new ArrayList<List<Button>>();
+        rows.add(row(button("Забронировать", "menu:book"), button("Мои записи", "menu:mine")));
         if (owner) {
-            second.add("Базы");
+            rows.add(row(button("О базе", "menu:about"), button("Базы", "menu:bases")));
+        } else {
+            rows.add(row(button("О базе", "menu:about")));
         }
-        rows.add(second);
-        ReplyKeyboardMarkup keyboard = new ReplyKeyboardMarkup();
-        keyboard.setKeyboard(rows);
-        keyboard.setResizeKeyboard(true);
-        send(chatId, "Здравствуйте! Что хотите сделать?", keyboard);
+        send(chatId, "Здравствуйте! Что хотите сделать?", rows);
     }
 
-    private void showMainMenu(long chatId, boolean owner, String notice) throws TelegramApiException {
+    private void showMainMenu(long chatId, boolean owner, String notice)  {
         showMainMenu(chatId, owner);
         if (notice != null) {
             send(chatId, notice, null);
         }
     }
 
-    private void sendMainMenu(long chatId, long userId, String notice) throws TelegramApiException {
+    private void sendMainMenu(long chatId, long userId, String notice)  {
         send(chatId, notice, null);
         showMainMenu(chatId, flow(userId).owner);
     }
@@ -1118,35 +1105,29 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         return value.substring(0, 1).toUpperCase(RU) + value.substring(1);
     }
 
-    private void send(long chatId, String text, org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboard keyboard)
-            throws TelegramApiException {
-        transport.sendMessage(new Message(text, keyboard), chatId);
+    private void send(long chatId, String text, List<List<Button>> keyboard) {
+        List<List<Button>> safeKeyboard = keyboard == null ? List.of() : keyboard;
+        transport.sendMessage(Message.builder().text(text).keyboard(safeKeyboard).build(), chatId);
     }
 
-    private void answerCallback(String callbackId) throws TelegramApiException {
-        AnswerCallbackQuery answer = new AnswerCallbackQuery();
-        answer.setCallbackQueryId(callbackId);
-        transport.answerCallbackQuery(answer);
-    }
-
-    private InlineKeyboardMarkup choices(InlineKeyboardButton... buttons) {
-        List<List<InlineKeyboardButton>> rows = new ArrayList<List<InlineKeyboardButton>>();
-        for (InlineKeyboardButton button : buttons) {
+    private List<List<Button>> choices(Button... buttons) {
+        List<List<Button>> rows = new ArrayList<List<Button>>();
+        for (Button button : buttons) {
             rows.add(row(button));
         }
         return markup(rows);
     }
 
-    private InlineKeyboardMarkup commentKeyboard() {
+    private List<List<Button>> commentKeyboard() {
         return choices(button("Пропустить", "book:skip"), button(BACK, "back"));
     }
 
-    private InlineKeyboardMarkup backKeyboard() {
+    private List<List<Button>> backKeyboard() {
         return choices(button(BACK, "back"));
     }
 
-    private InlineKeyboardMarkup leadKeyboard(long baseId, int offset) {
-        List<List<InlineKeyboardButton>> rows = new ArrayList<List<InlineKeyboardButton>>();
+    private List<List<Button>> leadKeyboard(long baseId, int offset) {
+        List<List<Button>> rows = new ArrayList<List<Button>>();
         int firstHour = Math.max(1, offset + 1);
         int lastHour = (int) Math.min(Integer.MAX_VALUE, (long) offset + 24);
         for (long hours = firstHour; hours <= lastHour; hours++) {
@@ -1155,7 +1136,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
                     : "owner:lead:" + baseId + ":" + hours;
             addButton(rows, button(String.valueOf(hours), callback), 6);
         }
-        List<InlineKeyboardButton> navigation = new ArrayList<InlineKeyboardButton>();
+        List<Button> navigation = new ArrayList<Button>();
         if (offset > 0) {
             int previous = Math.max(0, offset - 24);
             navigation.add(button("Предыдущие", baseId == 0
@@ -1173,38 +1154,22 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         rows.add(row(button(BACK, baseId == 0 ? "back" : "owner:base:" + baseId)));
         return markup(rows);
     }
-
-    private InlineKeyboardButton button(String text, String callback) {
-        InlineKeyboardButton button = new InlineKeyboardButton();
-        button.setText(text);
-        button.setCallbackData(callback);
-        return button;
+    private Button button(String text, String callback) {
+        return new Button(text, callback);
     }
 
-    private List<InlineKeyboardButton> row(InlineKeyboardButton... buttons) {
-        return new ArrayList<InlineKeyboardButton>(Arrays.asList(buttons));
+    private List<Button> row(Button... buttons) {
+        return new ArrayList<Button>(Arrays.asList(buttons));
     }
 
-    private void addButton(List<List<InlineKeyboardButton>> rows, InlineKeyboardButton button, int size) {
+    private void addButton(List<List<Button>> rows, Button button, int size) {
         if (rows.isEmpty() || rows.get(rows.size() - 1).size() >= size) {
-            rows.add(new ArrayList<InlineKeyboardButton>());
+            rows.add(new ArrayList<Button>());
         }
         rows.get(rows.size() - 1).add(button);
     }
 
-    private InlineKeyboardMarkup markup(List<List<InlineKeyboardButton>> rows) {
-        InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
-        markup.setKeyboard(rows);
-        return markup;
-    }
-
-    private long chatId(Update update) {
-        if (update.hasMessage()) {
-            return update.getMessage().getChatId();
-        }
-        if (update.hasCallbackQuery() && update.getCallbackQuery().getMessage() != null) {
-            return update.getCallbackQuery().getMessage().getChatId();
-        }
-        return 0;
+    private List<List<Button>> markup(List<List<Button>> rows) {
+        return rows;
     }
 }
