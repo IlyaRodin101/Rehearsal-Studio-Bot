@@ -26,30 +26,15 @@ public final class BookingMessageProcessingService implements MessageProcessingS
     private static final Logger LOGGER = LoggerFactory.getLogger(BookingMessageProcessingService.class);
 
     private enum Step {
-        MENU, ADD_NAME, ADD_ADDRESS, ADD_TIMEZONE, ADD_OPEN, ADD_CLOSE, ADD_ROOM_NAME,
-        ADD_ROOM_REQUIRED, ADD_ROOM_MORE, ADD_LEAD, ADD_EQUIPMENT,
-        EDIT_NAME, EDIT_ADDRESS, EDIT_TIMEZONE, EDIT_EQUIPMENT, EDIT_LEAD,
-        EDIT_ROOM_NAME, EDIT_ROOM_REQUIRED, EDIT_DAY_OPEN, EDIT_DAY_CLOSE,
-        BOOK_BASES, BOOK_ROOMS, BOOK_MONTH, BOOK_WEEK, BOOK_DAY, BOOK_TIME, BOOK_DURATION,
+        MENU, BOOK_BASES, BOOK_ROOMS, BOOK_MONTH, BOOK_WEEK, BOOK_DAY, BOOK_TIME, BOOK_DURATION,
         BOOK_NAME, BOOK_PHONE, BOOK_COMMENT, BOOK_CONFIRM
     }
 
     private static final class Flow {
         Step step = Step.MENU;
         final boolean owner;
-        String baseName;
-        String address;
-        String timezone;
-        String equipment;
-        int leadHours = 2;
-        int[][] schedule = new int[7][];
-        int dayIndex;
-        final List<String> roomNames = new ArrayList<String>();
-        final List<Boolean> roomCommentRequired = new ArrayList<Boolean>();
         long baseId;
         long roomId;
-        int editDay;
-        int editOpen;
         String name;
         String phone;
         String comment;
@@ -59,7 +44,6 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         int startHour;
         int hours;
         int monthOffset;
-        boolean creatingBase;
 
         Flow(boolean owner) {
             this.owner = owner;
@@ -125,67 +109,6 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         }
 
         switch (flow.step) {
-            case ADD_NAME:
-                if (text.isEmpty()) {
-                    send(chatId, "Введите название базы.", backKeyboard());
-                    return;
-                }
-                flow.baseName = text;
-                flow.step = Step.ADD_ADDRESS;
-                send(chatId, "Введите адрес базы.", backKeyboard());
-                break;
-            case ADD_ADDRESS:
-                if (text.isEmpty()) {
-                    send(chatId, "Введите адрес базы.", backKeyboard());
-                    return;
-                }
-                flow.address = text;
-                flow.step = Step.ADD_TIMEZONE;
-                send(chatId, "Введите часовой пояс базы. Например: Europe/Moscow.", backKeyboard());
-                break;
-            case ADD_TIMEZONE:
-                if (!validZone(text)) {
-                    send(chatId, "Не удалось распознать часовой пояс. Введите идентификатор, например Europe/Moscow.", backKeyboard());
-                    return;
-                }
-                flow.timezone = text;
-                flow.dayIndex = 0;
-                askOpeningHour(chatId, flow);
-                break;
-            case ADD_ROOM_NAME:
-                if (text.isEmpty()) {
-                    send(chatId, "Название зала не должно быть пустым. Введите название зала.", backKeyboard());
-                    return;
-                }
-                flow.roomNames.add(text);
-                flow.step = Step.ADD_ROOM_REQUIRED;
-                send(chatId, "Комментарий к записи в этом зале обязателен?", choices(
-                        button("Да", "setup:required:yes"),
-                        button("Нет", "setup:required:no"),
-                        button(BACK, "back")));
-                break;
-            case ADD_EQUIPMENT:
-                flow.equipment = text;
-                saveNewBase(chatId, flow);
-                break;
-            case EDIT_NAME:
-            case EDIT_ADDRESS:
-            case EDIT_TIMEZONE:
-            case EDIT_EQUIPMENT:
-                saveEditedText(chatId, flow, text);
-                break;
-            case EDIT_ROOM_NAME:
-                if (text.isEmpty()) {
-                    send(chatId, "Название зала не должно быть пустым. Введите название зала.", backKeyboard());
-                    return;
-                }
-                flow.baseName = text;
-                flow.step = Step.EDIT_ROOM_REQUIRED;
-                send(chatId, "Комментарий к записи в этом зале обязателен?", choices(
-                        button("Да", "roomreq:yes"),
-                        button("Нет", "roomreq:no"),
-                        button(BACK, "back")));
-                break;
             case BOOK_NAME:
                 if (text.isEmpty()) {
                     send(chatId, "Введите имя для связи.", backKeyboard());
@@ -593,12 +516,6 @@ public final class BookingMessageProcessingService implements MessageProcessingS
     }
 
     private void back(long chatId, Flow flow) throws SQLException {
-        if (flow.owner && flow.step != Step.MENU && !isBookingStep(flow.step)) {
-            flow.step = Step.MENU;
-            flow.clearBooking();
-            showBases(chatId);
-            return;
-        }
         switch (flow.step) {
             case BOOK_BASES:
             case MENU:
@@ -652,10 +569,6 @@ public final class BookingMessageProcessingService implements MessageProcessingS
                 flow.step = Step.MENU;
                 showMainMenu(chatId, flow.owner);
         }
-    }
-
-    private boolean isBookingStep(Step step) {
-        return step.ordinal() >= Step.BOOK_BASES.ordinal();
     }
 
     private void showMainMenu(long chatId, boolean owner) {
