@@ -1,28 +1,19 @@
 package ru.urfu.echobot.service;
 
-import java.sql.SQLException;
-import java.time.DayOfWeek;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.YearMonth;
-import java.time.ZoneId;
-import java.time.ZonedDateTime;
-import java.time.format.DateTimeFormatter;
-import java.time.format.TextStyle;
-import java.time.temporal.TemporalAdjusters;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import ru.urfu.echobot.bot.Bot;
+
+import java.sql.SQLException;
+import java.time.*;
+import java.time.format.DateTimeFormatter;
+import java.time.format.TextStyle;
+import java.time.temporal.TemporalAdjusters;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public final class BookingMessageProcessingService implements MessageProcessingService {
     private static final Locale RU = new Locale("ru", "RU");
@@ -33,67 +24,10 @@ public final class BookingMessageProcessingService implements MessageProcessingS
             "^(?:\\+7|8)[\\s()\\-]*(\\d{3})[\\s()\\-]*(\\d{3})[\\s()\\-]*(\\d{2})[\\s()\\-]*(\\d{2})$");
     private static final String[] DAY_NAMES = {"Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"};
     private static final Logger LOGGER = LoggerFactory.getLogger(BookingMessageProcessingService.class);
-
-    private enum Step {
-        MENU, ADD_NAME, ADD_ADDRESS, ADD_TIMEZONE, ADD_OPEN, ADD_CLOSE, ADD_ROOM_NAME,
-        ADD_ROOM_REQUIRED, ADD_ROOM_MORE, ADD_LEAD, ADD_EQUIPMENT,
-        EDIT_NAME, EDIT_ADDRESS, EDIT_TIMEZONE, EDIT_EQUIPMENT, EDIT_LEAD,
-        EDIT_ROOM_NAME, EDIT_ROOM_REQUIRED, EDIT_DAY_OPEN, EDIT_DAY_CLOSE,
-        BOOK_BASES, BOOK_ROOMS, BOOK_MONTH, BOOK_WEEK, BOOK_DAY, BOOK_TIME, BOOK_DURATION,
-        BOOK_NAME, BOOK_PHONE, BOOK_COMMENT, BOOK_CONFIRM
-    }
-
-    private static final class Flow {
-        Step step = Step.MENU;
-        final boolean owner;
-        String baseName;
-        String address;
-        String timezone;
-        String equipment;
-        int leadHours = 2;
-        int[][] schedule = new int[7][];
-        int dayIndex;
-        final List<String> roomNames = new ArrayList<String>();
-        final List<Boolean> roomCommentRequired = new ArrayList<Boolean>();
-        long baseId;
-        long roomId;
-        int editDay;
-        int editOpen;
-        String name;
-        String phone;
-        String comment;
-        YearMonth selectedMonth;
-        LocalDate selectedWeek;
-        LocalDate bookingDate;
-        int startHour;
-        int hours;
-        int monthOffset;
-        boolean creatingBase;
-
-        Flow(boolean owner) {
-            this.owner = owner;
-        }
-
-        void clearBooking() {
-            baseId = 0;
-            roomId = 0;
-            bookingDate = null;
-            startHour = 0;
-            hours = 0;
-            name = null;
-            phone = null;
-            comment = null;
-            selectedMonth = null;
-            selectedWeek = null;
-            monthOffset = 0;
-        }
-    }
-
     private final long ownerId;
     private final Database database;
-    private volatile Bot transport;
     private final Map<Long, Flow> flows = new ConcurrentHashMap<Long, Flow>();
-
+    private volatile Bot transport;
     public BookingMessageProcessingService(long ownerId, Database database) {
         this.ownerId = ownerId;
         this.database = database;
@@ -494,6 +428,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
                 showMainMenu(chatId, flow.owner);
         }
     }
+
     private void handleBookingCallback(long chatId, long userId, Flow flow, String[] parts)
             throws SQLException {
         if ("base".equals(parts[1])) {
@@ -869,7 +804,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         sendBaseSettings(chatId, flow.baseId, "Изменения сохранены.");
     }
 
-    private void askOpeningHour(long chatId, Flow flow)  {
+    private void askOpeningHour(long chatId, Flow flow) {
         flow.step = Step.ADD_OPEN;
         List<List<Button>> rows = new ArrayList<List<Button>>();
         for (int hour = 0; hour <= 23; hour++) {
@@ -879,7 +814,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         send(chatId, DAY_NAMES[flow.dayIndex] + ". Час открытия:", markup(rows));
     }
 
-    private void askClosingHour(long chatId, Flow flow)  {
+    private void askClosingHour(long chatId, Flow flow) {
         List<List<Button>> rows = new ArrayList<List<Button>>();
         int open = flow.schedule[flow.dayIndex][0];
         for (int hour = open + 1; hour <= 24; hour++) {
@@ -889,7 +824,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         send(chatId, DAY_NAMES[flow.dayIndex] + ". Час закрытия:", markup(rows));
     }
 
-    private void advanceSchedule(long chatId, Flow flow)  {
+    private void advanceSchedule(long chatId, Flow flow) {
         flow.dayIndex++;
         if (flow.dayIndex < 7) {
             askOpeningHour(chatId, flow);
@@ -899,12 +834,12 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         }
     }
 
-    private void askLeadHours(long chatId, Flow flow)  {
+    private void askLeadHours(long chatId, Flow flow) {
         flow.step = Step.ADD_LEAD;
         send(chatId, "За сколько часов до начала клиент ещё может бронировать?", leadKeyboard(0, 0));
     }
 
-    private void askEditClosingHour(long chatId, Flow flow)  {
+    private void askEditClosingHour(long chatId, Flow flow) {
         List<List<Button>> rows = new ArrayList<List<Button>>();
         for (int hour = flow.editOpen + 1; hour <= 24; hour++) {
             addButton(rows, button(formatHour(hour), "owner:setclose:" + hour), 4);
@@ -1030,14 +965,14 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         send(chatId, "Здравствуйте! Что хотите сделать?", rows);
     }
 
-    private void showMainMenu(long chatId, boolean owner, String notice)  {
+    private void showMainMenu(long chatId, boolean owner, String notice) {
         showMainMenu(chatId, owner);
         if (notice != null) {
             send(chatId, notice, null);
         }
     }
 
-    private void sendMainMenu(long chatId, long userId, String notice)  {
+    private void sendMainMenu(long chatId, long userId, String notice) {
         send(chatId, notice, null);
         showMainMenu(chatId, flow(userId).owner);
     }
@@ -1154,6 +1089,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         rows.add(row(button(BACK, baseId == 0 ? "back" : "owner:base:" + baseId)));
         return markup(rows);
     }
+
     private Button button(String text, String callback) {
         return new Button(text, callback);
     }
@@ -1171,5 +1107,60 @@ public final class BookingMessageProcessingService implements MessageProcessingS
 
     private List<List<Button>> markup(List<List<Button>> rows) {
         return rows;
+    }
+
+    private enum Step {
+        MENU, ADD_NAME, ADD_ADDRESS, ADD_TIMEZONE, ADD_OPEN, ADD_CLOSE, ADD_ROOM_NAME,
+        ADD_ROOM_REQUIRED, ADD_ROOM_MORE, ADD_LEAD, ADD_EQUIPMENT,
+        EDIT_NAME, EDIT_ADDRESS, EDIT_TIMEZONE, EDIT_EQUIPMENT, EDIT_LEAD,
+        EDIT_ROOM_NAME, EDIT_ROOM_REQUIRED, EDIT_DAY_OPEN, EDIT_DAY_CLOSE,
+        BOOK_BASES, BOOK_ROOMS, BOOK_MONTH, BOOK_WEEK, BOOK_DAY, BOOK_TIME, BOOK_DURATION,
+        BOOK_NAME, BOOK_PHONE, BOOK_COMMENT, BOOK_CONFIRM
+    }
+
+    private static final class Flow {
+        final boolean owner;
+        final List<String> roomNames = new ArrayList<String>();
+        final List<Boolean> roomCommentRequired = new ArrayList<Boolean>();
+        Step step = Step.MENU;
+        String baseName;
+        String address;
+        String timezone;
+        String equipment;
+        int leadHours = 2;
+        int[][] schedule = new int[7][];
+        int dayIndex;
+        long baseId;
+        long roomId;
+        int editDay;
+        int editOpen;
+        String name;
+        String phone;
+        String comment;
+        YearMonth selectedMonth;
+        LocalDate selectedWeek;
+        LocalDate bookingDate;
+        int startHour;
+        int hours;
+        int monthOffset;
+        boolean creatingBase;
+
+        Flow(boolean owner) {
+            this.owner = owner;
+        }
+
+        void clearBooking() {
+            baseId = 0;
+            roomId = 0;
+            bookingDate = null;
+            startHour = 0;
+            hours = 0;
+            name = null;
+            phone = null;
+            comment = null;
+            selectedMonth = null;
+            selectedWeek = null;
+            monthOffset = 0;
+        }
     }
 }

@@ -1,8 +1,9 @@
 package ru.urfu.echobot.service;
 
-import java.util.List;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+
+import java.util.List;
 
 /// Сообщение, которыми обмениваются боты и сервисы.
 ///

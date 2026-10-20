@@ -1,10 +1,10 @@
 package ru.urfu.echobot.bot;
 
+import org.jetbrains.annotations.NotNull;
+import ru.urfu.echobot.service.Message;
+
 import java.util.ArrayList;
 import java.util.List;
-import org.jetbrains.annotations.NotNull;
-import ru.urfu.echobot.bot.Bot;
-import ru.urfu.echobot.service.Message;
 
 /// Бот-заглушка для тестов: запоминает все отправленные сообщения.
 public final class DummyBot implements Bot {

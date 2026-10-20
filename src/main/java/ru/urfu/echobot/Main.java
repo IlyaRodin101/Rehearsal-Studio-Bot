@@ -35,9 +35,7 @@ final public class Main {
             LOGGER.error("{} must be a number", OWNER_ID, e);
             return;
         }
-        final String databasePath = System.getenv(DATABASE_PATH) == null || System.getenv(DATABASE_PATH).isBlank()
-                ? DEFAULT_DATABASE_PATH
-                : System.getenv(DATABASE_PATH).trim();
+        final String databasePath = System.getenv(DATABASE_PATH) == null || System.getenv(DATABASE_PATH).isBlank() ? DEFAULT_DATABASE_PATH : System.getenv(DATABASE_PATH).trim();
 
         try {
             final Database database = new Database(databasePath);
