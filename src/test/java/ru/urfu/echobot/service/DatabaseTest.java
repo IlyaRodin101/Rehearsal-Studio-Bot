@@ -1,8 +1,7 @@
 package ru.urfu.echobot.service;
 
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Path;
 import java.time.LocalDateTime;
@@ -14,18 +13,22 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
-public class DatabaseTest {
-    @Rule
-    public TemporaryFolder temporaryFolder = new TemporaryFolder();
+/// Тесты хранилища: конкурентные бронирования и сохранность данных после перезапуска.
+final class DatabaseTest {
+    /// Временная папка, в которой создаётся файл базы данных.
+    @TempDir
+    private Path tempDir;
 
+    /// Given: две одновременные попытки забронировать одно время.
+    /// When: обе выполняются параллельно.
+    /// Then: успешна ровно одна, и запись сохраняется после перезапуска базы.
+    ///
+    /// @throws Exception если тест не смог выполниться
     @Test
-    public void competingBookingsCannotOverlapAndPersistAfterRestart() throws Exception {
-        Path databaseFile = temporaryFolder.newFile("booking.db").toPath();
+    void competingBookingsCannotOverlapAndPersistAfterRestart() throws Exception {
+        Path databaseFile = tempDir.resolve("booking.db");
         Database database = new Database(databaseFile.toString());
         database.initialize();
 
@@ -47,7 +50,7 @@ public class DatabaseTest {
         assertFalse(database.createBooking(roomId, 5, tooLate, 2,
                 "Клиент", "+79990000000", ""));
         LocalDateTime start = LocalDateTime.now(ZoneId.of("UTC")).plusDays(2)
-                .withMinute(0).withSecond(0).withNano(0);
+                .withHour(10).withMinute(0).withSecond(0).withNano(0);
 
         final CountDownLatch ready = new CountDownLatch(2);
         final CountDownLatch startTogether = new CountDownLatch(1);
@@ -74,6 +77,16 @@ public class DatabaseTest {
         }
     }
 
+    /// Пытается создать бронь, дождавшись общего сигнала старта для всех потоков.
+    ///
+    /// @param database      проверяемая база данных
+    /// @param roomId        идентификатор зала
+    /// @param start         время начала записи
+    /// @param ready         счётчик готовых потоков
+    /// @param startTogether сигнал одновременного старта
+    /// @param userId        идентификатор пользователя
+    /// @return true, если бронь создана
+    /// @throws Exception если поток прервали или произошла ошибка базы
     private Boolean tryCreate(Database database, long roomId, LocalDateTime start,
                               CountDownLatch ready, CountDownLatch startTogether, long userId) throws Exception {
         ready.countDown();

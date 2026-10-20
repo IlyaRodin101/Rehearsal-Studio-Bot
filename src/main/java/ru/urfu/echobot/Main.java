@@ -1,36 +1,51 @@
 package ru.urfu.echobot;
 
-import org.telegram.telegrambots.meta.TelegramBotsApi;
-import org.telegram.telegrambots.updatesreceivers.DefaultBotSession;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import ru.urfu.echobot.bot.TelegramBot;
 import ru.urfu.echobot.service.BookingMessageProcessingService;
 import ru.urfu.echobot.service.Database;
+import ru.urfu.echobot.service.MessageProcessingService;
 
-public final class Main {
+/// Основной класс для запуска приложения.
+final public class Main {
+    private static final Logger LOGGER = LoggerFactory.getLogger(Main.class);
+    private static final String TELEGRAM_TOKEN = "TELEGRAM_TOKEN";
+    private static final String OWNER_ID = "OWNER_ID";
+    private static final String DATABASE_PATH = "DATABASE_PATH";
+    private static final String DEFAULT_DATABASE_PATH = "database.db";
+
+    /// Приватный конструктор, добавленный для того, чтобы явно сообщить,
+    /// что не нужно создавать объекты этого класса.
     private Main() {
     }
 
-    public static void main(String[] args) throws Exception {
-        String token = requiredEnvironment("TELEGRAM_TOKEN");
-        long ownerId = Long.parseLong(requiredEnvironment("OWNER_ID"));
-        String databasePath = System.getenv("DATABASE_PATH");
-        if (databasePath == null || databasePath.trim().isEmpty()) {
-            databasePath = "database.db";
+    /// Точка входа в программу.
+    static void main() {
+        final String tgBotToken = System.getenv(TELEGRAM_TOKEN);
+        final String ownerIdText = System.getenv(OWNER_ID);
+        if (tgBotToken == null || ownerIdText == null) {
+            LOGGER.error("Set environment variables {} and {}", TELEGRAM_TOKEN, OWNER_ID);
+            return;
         }
-
-        Database database = new Database(databasePath);
-        database.initialize();
-        TelegramBotsApi botsApi = new TelegramBotsApi(DefaultBotSession.class);
-        BookingMessageProcessingService messageProcessingService =
-                new BookingMessageProcessingService(ownerId, database);
-        botsApi.registerBot(new TelegramBot(token, messageProcessingService));
-    }
-
-    private static String requiredEnvironment(String name) {
-        String value = System.getenv(name);
-        if (value == null || value.trim().isEmpty()) {
-            throw new IllegalStateException("Не задана обязательная переменная окружения " + name);
+        final long ownerId;
+        try {
+            ownerId = Long.parseLong(ownerIdText.trim());
+        } catch (NumberFormatException e) {
+            LOGGER.error("{} must be a number", OWNER_ID, e);
+            return;
         }
-        return value.trim();
+        final String databasePath = System.getenv(DATABASE_PATH) == null || System.getenv(DATABASE_PATH).isBlank() ? DEFAULT_DATABASE_PATH : System.getenv(DATABASE_PATH).trim();
+
+        try {
+            final Database database = new Database(databasePath);
+            database.initialize();
+            final MessageProcessingService service = new BookingMessageProcessingService(ownerId, database);
+            try (TelegramBot bot = new TelegramBot(tgBotToken, service)) {
+                bot.start();
+            }
+        } catch (Exception e) {
+            LOGGER.error("Couldn't start Telegram bot", e);
+        }
     }
 }

@@ -1,11 +1,14 @@
 package ru.urfu.echobot.bot;
 
-import org.telegram.telegrambots.meta.api.methods.AnswerCallbackQuery;
-import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
+import org.jetbrains.annotations.NotNull;
 import ru.urfu.echobot.service.Message;
 
+/// Бот, умеющий отправлять сообщения.
 public interface Bot {
-    void sendMessage(Message message, long chatId) throws TelegramApiException;
 
-    void answerCallbackQuery(AnswerCallbackQuery answer) throws TelegramApiException;
+    /// Отправляет сообщение.
+    ///
+    /// @param msg сообщение, которое требуется отправить
+    /// @param id  идентификатор получателя
+    void sendMessage(@NotNull Message msg, long id);
 }
