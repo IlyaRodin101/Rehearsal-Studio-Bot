@@ -24,47 +24,9 @@ public final class BookingMessageProcessingService implements MessageProcessingS
             "^(?:\\+7|8)[\\s()\\-]*(\\d{3})[\\s()\\-]*(\\d{3})[\\s()\\-]*(\\d{2})[\\s()\\-]*(\\d{2})$");
     private static final String[] DAY_NAMES = {"Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"};
     private static final Logger LOGGER = LoggerFactory.getLogger(BookingMessageProcessingService.class);
-
-    private enum Step {
-        MENU, BOOK_BASES, BOOK_ROOMS, BOOK_MONTH, BOOK_WEEK, BOOK_DAY, BOOK_TIME, BOOK_DURATION,
-        BOOK_NAME, BOOK_PHONE, BOOK_COMMENT, BOOK_CONFIRM
-    }
-
-    private static final class Flow {
-        Step step = Step.MENU;
-        long baseId;
-        long roomId;
-        String name;
-        String phone;
-        String comment;
-        YearMonth selectedMonth;
-        LocalDate selectedWeek;
-        LocalDate bookingDate;
-        int startHour;
-        int hours;
-        int monthOffset;
-
-        Flow() {}
-
-        void clearBooking() {
-            baseId = 0;
-            roomId = 0;
-            bookingDate = null;
-            startHour = 0;
-            hours = 0;
-            name = null;
-            phone = null;
-            comment = null;
-            selectedMonth = null;
-            selectedWeek = null;
-            monthOffset = 0;
-        }
-    }
-
     private final Database database;
-    private volatile Bot transport;
     private final Map<Long, Flow> flows = new ConcurrentHashMap<Long, Flow>();
-
+    private volatile Bot transport;
     public BookingMessageProcessingService(Database database) {
         this.database = database;
     }
@@ -182,6 +144,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
                 showMainMenu(chatId);
         }
     }
+
     private void handleBookingCallback(long chatId, long userId, Flow flow, String[] parts)
             throws SQLException {
         if ("base".equals(parts[1])) {
@@ -573,7 +536,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         send(chatId, "Здравствуйте! Что хотите сделать?", rows);
     }
 
-    private void sendMainMenu(long chatId, String notice)  {
+    private void sendMainMenu(long chatId, String notice) {
         send(chatId, notice, null);
         showMainMenu(chatId);
     }
@@ -651,5 +614,42 @@ public final class BookingMessageProcessingService implements MessageProcessingS
 
     private List<List<Button>> markup(List<List<Button>> rows) {
         return rows;
+    }
+
+    private enum Step {
+        MENU, BOOK_BASES, BOOK_ROOMS, BOOK_MONTH, BOOK_WEEK, BOOK_DAY, BOOK_TIME, BOOK_DURATION,
+        BOOK_NAME, BOOK_PHONE, BOOK_COMMENT, BOOK_CONFIRM
+    }
+
+    private static final class Flow {
+        Step step = Step.MENU;
+        long baseId;
+        long roomId;
+        String name;
+        String phone;
+        String comment;
+        YearMonth selectedMonth;
+        LocalDate selectedWeek;
+        LocalDate bookingDate;
+        int startHour;
+        int hours;
+        int monthOffset;
+
+        Flow() {
+        }
+
+        void clearBooking() {
+            baseId = 0;
+            roomId = 0;
+            bookingDate = null;
+            startHour = 0;
+            hours = 0;
+            name = null;
+            phone = null;
+            comment = null;
+            selectedMonth = null;
+            selectedWeek = null;
+            monthOffset = 0;
+        }
     }
 }

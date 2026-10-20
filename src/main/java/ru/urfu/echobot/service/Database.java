@@ -1,11 +1,6 @@
 package ru.urfu.echobot.service;
 
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Statement;
+import java.sql.*;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
@@ -13,65 +8,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 public final class Database {
-    static final class Base {
-        final long id;
-        final String name;
-        final String address;
-        final String timezone;
-        final int bookingLeadHours;
-        final String equipment;
-
-        Base(long id, String name, String address, String timezone, int bookingLeadHours, String equipment) {
-            this.id = id;
-            this.name = name;
-            this.address = address;
-            this.timezone = timezone;
-            this.bookingLeadHours = bookingLeadHours;
-            this.equipment = equipment;
-        }
-    }
-
-    static final class Room {
-        final long id;
-        final long baseId;
-        final String name;
-        final boolean commentRequired;
-
-        Room(long id, long baseId, String name, boolean commentRequired) {
-            this.id = id;
-            this.baseId = baseId;
-            this.name = name;
-            this.commentRequired = commentRequired;
-        }
-    }
-
-    static final class Booking {
-        final long id;
-        final long roomId;
-        final String roomName;
-        final String baseName;
-        final String timezone;
-        final LocalDateTime start;
-        final int hours;
-        final String customerName;
-        final String phone;
-        final String comment;
-
-        Booking(long id, long roomId, String roomName, String baseName, String timezone,
-                LocalDateTime start, int hours, String customerName, String phone, String comment) {
-            this.id = id;
-            this.roomId = roomId;
-            this.roomName = roomName;
-            this.baseName = baseName;
-            this.timezone = timezone;
-            this.start = start;
-            this.hours = hours;
-            this.customerName = customerName;
-            this.phone = phone;
-            this.comment = comment;
-        }
-    }
-
     private final String jdbcUrl;
     private final Object writeLock = new Object();
 
@@ -433,5 +369,64 @@ public final class Database {
             statement.execute("PRAGMA busy_timeout = 5000");
         }
         return connection;
+    }
+
+    static final class Base {
+        final long id;
+        final String name;
+        final String address;
+        final String timezone;
+        final int bookingLeadHours;
+        final String equipment;
+
+        Base(long id, String name, String address, String timezone, int bookingLeadHours, String equipment) {
+            this.id = id;
+            this.name = name;
+            this.address = address;
+            this.timezone = timezone;
+            this.bookingLeadHours = bookingLeadHours;
+            this.equipment = equipment;
+        }
+    }
+
+    static final class Room {
+        final long id;
+        final long baseId;
+        final String name;
+        final boolean commentRequired;
+
+        Room(long id, long baseId, String name, boolean commentRequired) {
+            this.id = id;
+            this.baseId = baseId;
+            this.name = name;
+            this.commentRequired = commentRequired;
+        }
+    }
+
+    static final class Booking {
+        final long id;
+        final long roomId;
+        final String roomName;
+        final String baseName;
+        final String timezone;
+        final LocalDateTime start;
+        final int hours;
+        final String customerName;
+        final String phone;
+        final String comment;
+
+        Booking(long id, long roomId, String roomName, String baseName, String timezone,
+                LocalDateTime start, int hours, String customerName, String phone, String comment) {
+            this.id = id;
+            this.roomId = roomId;
+            this.roomName = roomName;
+            this.baseName = baseName;
+            this.timezone = timezone;
+            this.start = start;
+            this.hours = hours;
+            this.customerName = customerName;
+            this.phone = phone;
+            this.comment = comment;
+        }
     }
 }
