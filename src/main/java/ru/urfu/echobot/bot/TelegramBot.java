@@ -18,7 +18,6 @@ import org.telegram.telegrambots.meta.generics.TelegramClient;
 import ru.urfu.echobot.service.Button;
 import ru.urfu.echobot.service.Message;
 import ru.urfu.echobot.service.MessageProcessingService;
-
 import java.util.ArrayList;
 import java.util.List;
 

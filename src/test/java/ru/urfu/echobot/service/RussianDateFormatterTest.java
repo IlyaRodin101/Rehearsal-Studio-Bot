@@ -7,6 +7,7 @@ import java.time.DayOfWeek;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
 import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /// Тесты форматирования дат и времени.
 final class RussianDateFormatterTest {
@@ -85,6 +86,27 @@ final class RussianDateFormatterTest {
         assertEquals(
                 "Октябрь 2026",
                 formatter.monthYear(YearMonth.of(2026, 10))
+        );
+    }
+
+    /// Проверяет форматирование диапазона внутри одного месяца.
+    @Test
+    void weekRangeHasExpectedFormat() {
+        LocalDate start = LocalDate.of(2026, 10, 19);
+        LocalDate end = LocalDate.of(2026, 10, 25);
+
+        assertEquals("19-25 окт.", formatter.weekRange(start, end));
+    }
+
+    /// Проверяет отклонение диапазона с неправильным порядком дат.
+    @Test
+    void weekRangeRejectsEndBeforeStart() {
+        LocalDate start = LocalDate.of(2026, 10, 25);
+        LocalDate end = LocalDate.of(2026, 10, 19);
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> formatter.weekRange(start, end)
         );
     }
 }

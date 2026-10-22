@@ -52,6 +52,21 @@ public final class RussianDateFormatter {
         return date.format(shortDateFormat);
     }
 
+    /// Форматирует диапазон дат для кнопки выбора недели.
+    ///
+    /// @param start первый день диапазона
+    /// @param end последний день диапазона
+    /// @return строка вида «19-25 окт.»
+    /// @throws IllegalArgumentException если конец раньше начала
+    public String weekRange(@NotNull LocalDate start, @NotNull LocalDate end) {
+        if (end.isBefore(start)) {
+            throw new IllegalArgumentException(
+                    "Конец диапазона не может быть раньше начала");
+        }
+
+        return start.getDayOfMonth() + "-" + shortDate(end);
+    }
+
     /// Форматирует месяц с годом, первая буква заглавная.
     ///
     /// @param month месяц
