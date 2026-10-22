@@ -18,7 +18,7 @@ public final class PhoneNormalizer {
     ///
     /// @param input введённый пользователем текст
     /// @return номер вида +7XXXXXXXXXX или пустой результат, если ввод не похож на российский номер
-    public Optional<String> normalize(@NotNull String input) {
+    public Optional<String> normalizeRussianPhone(@NotNull String input) {
         Matcher matcher = russianPhone.matcher(input.trim());
         if (!matcher.matches()) {
             return Optional.empty();
