@@ -22,6 +22,13 @@ public final class DummyBot implements Bot {
         return sentMessages.get(sentMessages.size() - 1);
     }
 
+    /// Возвращает все отправленные сообщения.
+    ///
+    /// @return копия списка сообщений в порядке отправки
+    public List<Message> messages() {
+        return List.copyOf(sentMessages);
+    }
+
     /// Возвращает число отправленных сообщений.
     ///
     /// @return количество сообщений
