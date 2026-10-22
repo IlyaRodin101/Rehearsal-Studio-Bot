@@ -1,18 +1,23 @@
 package ru.urfu.echobot;
 
+import java.time.Clock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import ru.urfu.echobot.bot.TelegramBot;
+import ru.urfu.echobot.repository.InMemoryBaseRepository;
+import ru.urfu.echobot.repository.InMemoryBookingRepository;
+import ru.urfu.echobot.repository.InMemoryRoomRepository;
+import ru.urfu.echobot.repository.InitialData;
 import ru.urfu.echobot.service.BookingMessageProcessingService;
-import ru.urfu.echobot.service.Database;
+import ru.urfu.echobot.service.BookingRules;
 import ru.urfu.echobot.service.MessageProcessingService;
 
 /// Основной класс для запуска приложения.
 final public class Main {
+    /// Логгер приложения.
     private static final Logger LOGGER = LoggerFactory.getLogger(Main.class);
+    /// Имя переменной окружения с токеном бота.
     private static final String TELEGRAM_TOKEN = "TELEGRAM_TOKEN";
-    private static final String DATABASE_PATH = "DATABASE_PATH";
-    private static final String DEFAULT_DATABASE_PATH = "database.db";
 
     /// Приватный конструктор, добавленный для того, чтобы явно сообщить,
     /// что не нужно создавать объекты этого класса.
@@ -26,17 +31,15 @@ final public class Main {
             LOGGER.error("Set environment variable {}", TELEGRAM_TOKEN);
             return;
         }
-        final String databasePath = System.getenv(DATABASE_PATH) == null || System.getenv(DATABASE_PATH).isBlank()
-                ? DEFAULT_DATABASE_PATH
-                : System.getenv(DATABASE_PATH).trim();
-
-        try {
-            final Database database = new Database(databasePath);
-            database.initialize();
-            final MessageProcessingService service = new BookingMessageProcessingService(database);
-            try (TelegramBot bot = new TelegramBot(tgBotToken, service)) {
-                bot.start();
-            }
+        final Clock clock = Clock.systemUTC();
+        final InitialData data = new InitialData(clock);
+        final MessageProcessingService service = new BookingMessageProcessingService(
+                new InMemoryBaseRepository(data.bases()),
+                new InMemoryRoomRepository(data.rooms()),
+                new InMemoryBookingRepository(data.bookings()),
+                new BookingRules(clock));
+        try (TelegramBot bot = new TelegramBot(tgBotToken, service)) {
+            bot.start();
         } catch (Exception e) {
             LOGGER.error("Couldn't start Telegram bot", e);
         }
