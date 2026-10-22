@@ -13,6 +13,9 @@ import org.jetbrains.annotations.NotNull;
 
 /// Форматирует даты, время и названия дней недели для сообщений бота на русском языке.
 public final class RussianDateFormatter {
+    /// Число часов в сутках: так выводится полночь как время окончания брони.
+    private static final int HOURS_PER_DAY = 24;
+
     /// Русская локаль для названий месяцев и дней.
     private final Locale russian = Locale.of("ru", "RU");
     /// Формат даты, например «24 окт.».
@@ -39,7 +42,7 @@ public final class RussianDateFormatter {
     /// @return строка вида «20:00» или «24:00»
     public String endTime(@NotNull LocalDateTime start, @NotNull LocalDateTime end) {
         if (end.toLocalTime().equals(LocalTime.MIDNIGHT) && end.toLocalDate().isAfter(start.toLocalDate())) {
-            return hour(24);
+            return hour(HOURS_PER_DAY);
         }
         return hour(end.getHour());
     }
