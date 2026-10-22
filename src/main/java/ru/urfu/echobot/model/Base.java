@@ -1,9 +1,10 @@
 package ru.urfu.echobot.model;
 
+import org.jetbrains.annotations.NotNull;
+
 import java.time.DayOfWeek;
 import java.util.Map;
 import java.util.Optional;
-import org.jetbrains.annotations.NotNull;
 
 /// Репетиционная база.
 ///

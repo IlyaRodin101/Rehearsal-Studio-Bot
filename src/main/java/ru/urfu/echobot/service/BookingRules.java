@@ -1,15 +1,12 @@
 package ru.urfu.echobot.service;
 
-import java.time.Clock;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
-import java.time.ZonedDateTime;
-import java.util.Optional;
 import org.jetbrains.annotations.NotNull;
 import ru.urfu.echobot.model.Base;
 import ru.urfu.echobot.model.Booking;
 import ru.urfu.echobot.model.OpeningHours;
+
+import java.time.*;
+import java.util.Optional;
 
 /// Правила бронирования: часы работы базы и срок, за который ещё можно бронировать.
 /// Текущее время берётся из переданных часов, поэтому правила легко проверять в тестах.

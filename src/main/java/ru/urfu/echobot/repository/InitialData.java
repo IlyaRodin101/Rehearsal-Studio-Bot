@@ -1,5 +1,10 @@
 package ru.urfu.echobot.repository;
 
+import ru.urfu.echobot.model.Base;
+import ru.urfu.echobot.model.Booking;
+import ru.urfu.echobot.model.OpeningHours;
+import ru.urfu.echobot.model.Room;
+
 import java.time.Clock;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
@@ -7,10 +12,6 @@ import java.time.ZoneId;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
-import ru.urfu.echobot.model.Base;
-import ru.urfu.echobot.model.Booking;
-import ru.urfu.echobot.model.OpeningHours;
-import ru.urfu.echobot.model.Room;
 
 /// Начальные данные бота: две базы с залами и две записи на чужое имя.
 /// Создаются заново при каждом запуске, поэтому после перезапуска состояние всегда одинаковое.

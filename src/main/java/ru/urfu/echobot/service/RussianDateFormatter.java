@@ -1,15 +1,12 @@
 package ru.urfu.echobot.service;
 
-import java.time.DayOfWeek;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
-import java.time.YearMonth;
+import org.jetbrains.annotations.NotNull;
+
+import java.time.*;
 import java.time.format.DateTimeFormatter;
 import java.time.format.TextStyle;
 import java.util.List;
 import java.util.Locale;
-import org.jetbrains.annotations.NotNull;
 
 /// Форматирует даты, время и названия дней недели для сообщений бота на русском языке.
 public final class RussianDateFormatter {
@@ -58,7 +55,7 @@ public final class RussianDateFormatter {
     /// Форматирует диапазон дат для кнопки выбора недели.
     ///
     /// @param start первый день диапазона
-    /// @param end последний день диапазона
+    /// @param end   последний день диапазона
     /// @return строка вида «19-25 окт.»
     /// @throws IllegalArgumentException если конец раньше начала
     public String weekRange(@NotNull LocalDate start, @NotNull LocalDate end) {

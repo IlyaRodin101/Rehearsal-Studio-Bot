@@ -1,7 +1,8 @@
 package ru.urfu.echobot.model;
 
-import java.time.LocalDateTime;
 import org.jetbrains.annotations.NotNull;
+
+import java.time.LocalDateTime;
 
 /// Бронь зала на целое число часов. Время указано по часовому поясу базы.
 ///

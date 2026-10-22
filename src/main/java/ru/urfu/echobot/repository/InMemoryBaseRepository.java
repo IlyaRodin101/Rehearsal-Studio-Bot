@@ -1,8 +1,9 @@
 package ru.urfu.echobot.repository;
 
+import ru.urfu.echobot.model.Base;
+
 import java.util.List;
 import java.util.Optional;
-import ru.urfu.echobot.model.Base;
 
 /// Хранилище баз в памяти. Данные задаются при создании и не меняются.
 public final class InMemoryBaseRepository implements BaseRepository {

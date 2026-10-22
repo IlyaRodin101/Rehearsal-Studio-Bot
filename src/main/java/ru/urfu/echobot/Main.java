@@ -1,6 +1,5 @@
 package ru.urfu.echobot;
 
-import java.time.Clock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import ru.urfu.echobot.bot.TelegramBot;
@@ -11,6 +10,8 @@ import ru.urfu.echobot.repository.InitialData;
 import ru.urfu.echobot.service.BookingMessageProcessingService;
 import ru.urfu.echobot.service.BookingRules;
 import ru.urfu.echobot.service.MessageProcessingService;
+
+import java.time.Clock;
 
 /// Основной класс для запуска приложения.
 final public class Main {

@@ -1,8 +1,9 @@
 package ru.urfu.echobot.repository;
 
+import ru.urfu.echobot.model.Base;
+
 import java.util.List;
 import java.util.Optional;
-import ru.urfu.echobot.model.Base;
 
 /// Хранилище репетиционных баз. Сервис не знает, где именно лежат данные.
 public interface BaseRepository {

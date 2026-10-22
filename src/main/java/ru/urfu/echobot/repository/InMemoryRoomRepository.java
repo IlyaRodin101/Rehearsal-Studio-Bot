@@ -1,8 +1,9 @@
 package ru.urfu.echobot.repository;
 
+import ru.urfu.echobot.model.Room;
+
 import java.util.List;
 import java.util.Optional;
-import ru.urfu.echobot.model.Room;
 
 /// Хранилище залов в памяти. Данные задаются при создании и не меняются.
 public final class InMemoryRoomRepository implements RoomRepository {

@@ -1,10 +1,11 @@
 package ru.urfu.echobot.repository;
 
+import ru.urfu.echobot.model.Booking;
+
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import ru.urfu.echobot.model.Booking;
 
 /// Хранилище броней в памяти. Брони живут, пока работает бот.
 /// Все методы синхронизированы: бот обслуживает много пользователей одновременно.

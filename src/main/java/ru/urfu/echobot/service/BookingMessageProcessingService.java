@@ -40,7 +40,8 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         int hours;
         int monthOffset;
 
-        Flow() {}
+        Flow() {
+        }
 
         void clearBooking() {
             baseId = 0;
@@ -182,6 +183,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
                 showMainMenu(chatId);
         }
     }
+
     private void handleBookingCallback(long chatId, long userId, Flow flow, String[] parts) {
         if ("base".equals(parts[1])) {
             flow.clearBooking();
@@ -570,7 +572,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         send(chatId, "Здравствуйте! Что хотите сделать?", rows);
     }
 
-    private void sendMainMenu(long chatId, String notice)  {
+    private void sendMainMenu(long chatId, String notice) {
         send(chatId, notice, null);
         showMainMenu(chatId);
     }

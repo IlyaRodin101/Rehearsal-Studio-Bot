@@ -1,9 +1,10 @@
 package ru.urfu.echobot.service;
 
+import org.jetbrains.annotations.NotNull;
+
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import org.jetbrains.annotations.NotNull;
 
 /// Приводит российские номера телефонов к виду +7XXXXXXXXXX.
 public final class PhoneNormalizer {

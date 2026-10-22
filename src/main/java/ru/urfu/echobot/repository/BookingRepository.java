@@ -1,8 +1,9 @@
 package ru.urfu.echobot.repository;
 
+import ru.urfu.echobot.model.Booking;
+
 import java.time.LocalDateTime;
 import java.util.List;
-import ru.urfu.echobot.model.Booking;
 
 /// Хранилище броней.
 public interface BookingRepository {
