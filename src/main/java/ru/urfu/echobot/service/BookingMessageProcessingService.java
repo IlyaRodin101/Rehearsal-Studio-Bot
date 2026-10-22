@@ -4,49 +4,87 @@ import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import ru.urfu.echobot.bot.Bot;
+import ru.urfu.echobot.model.Base;
+import ru.urfu.echobot.model.Booking;
+import ru.urfu.echobot.model.OpeningHours;
+import ru.urfu.echobot.model.Room;
+import ru.urfu.echobot.repository.BaseRepository;
+import ru.urfu.echobot.repository.BookingRepository;
+import ru.urfu.echobot.repository.RoomRepository;
 
-import java.sql.SQLException;
 import java.time.*;
-import java.time.format.DateTimeFormatter;
-import java.time.format.TextStyle;
 import java.time.temporal.TemporalAdjusters;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 public final class BookingMessageProcessingService implements MessageProcessingService {
-    private static final Locale RU = new Locale("ru", "RU");
     private static final String BACK = "Назад";
-    private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("d MMM", RU);
-    private static final DateTimeFormatter MONTH = DateTimeFormatter.ofPattern("LLLL yyyy", RU);
-    private static final Pattern RUSSIAN_PHONE = Pattern.compile(
-            "^(?:\\+7|8)[\\s()\\-]*(\\d{3})[\\s()\\-]*(\\d{3})[\\s()\\-]*(\\d{2})[\\s()\\-]*(\\d{2})$");
-    private static final String[] DAY_NAMES = {"Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"};
     private static final Logger LOGGER = LoggerFactory.getLogger(BookingMessageProcessingService.class);
-    private final Database database;
-    private final Map<Long, Flow> flows = new ConcurrentHashMap<Long, Flow>();
+
+    private enum Step {
+        MENU, BOOK_BASES, BOOK_ROOMS, BOOK_MONTH, BOOK_WEEK, BOOK_DAY, BOOK_TIME, BOOK_DURATION,
+        BOOK_NAME, BOOK_PHONE, BOOK_COMMENT, BOOK_CONFIRM
+    }
+
+    private static final class Flow {
+        Step step = Step.MENU;
+        long baseId;
+        long roomId;
+        String name;
+        String phone;
+        String comment;
+        YearMonth selectedMonth;
+        LocalDate selectedWeek;
+        LocalDate bookingDate;
+        int startHour;
+        int hours;
+        int monthOffset;
+
+        Flow() {}
+
+        void clearBooking() {
+            baseId = 0;
+            roomId = 0;
+            bookingDate = null;
+            startHour = 0;
+            hours = 0;
+            name = null;
+            phone = null;
+            comment = null;
+            selectedMonth = null;
+            selectedWeek = null;
+            monthOffset = 0;
+        }
+    }
+
+    private final BaseRepository baseRepository;
+    private final RoomRepository roomRepository;
+    private final BookingRepository bookingRepository;
+    private final BookingRules rules;
     private volatile Bot transport;
-    public BookingMessageProcessingService(Database database) {
-        this.database = database;
+    private final Map<Long, Flow> flows = new ConcurrentHashMap<Long, Flow>();
+    private final PhoneNormalizer phoneNormalizer = new PhoneNormalizer();
+    private final RussianDateFormatter formatter = new RussianDateFormatter();
+
+    public BookingMessageProcessingService(BaseRepository baseRepository, RoomRepository roomRepository,
+                                           BookingRepository bookingRepository, BookingRules rules) {
+        this.baseRepository = baseRepository;
+        this.roomRepository = roomRepository;
+        this.bookingRepository = bookingRepository;
+        this.rules = rules;
     }
 
     @Override
     public void processMessage(@NotNull Message msg, long chatId, @NotNull Bot bot) {
         transport = bot;
-        try {
-            if (msg.buttonData() != null) {
-                handleCallback(msg.buttonData(), chatId);
-            } else if (msg.text() != null) {
-                handleText(msg.text(), chatId);
-            }
-        } catch (SQLException ex) {
-            LOGGER.error("Ошибка при обработке сообщения", ex);
-            send(chatId, "Не удалось выполнить действие. Попробуйте ещё раз.", null);
+        if (msg.buttonData() != null) {
+            handleCallback(msg.buttonData(), chatId);
+        } else if (msg.text() != null) {
+            handleText(msg.text(), chatId);
         }
     }
 
-    private void handleText(String rawText, long chatId) throws SQLException {
+    private void handleText(String rawText, long chatId) {
         long userId = chatId;
         String text = rawText.trim();
         Flow flow = flow(userId);
@@ -76,18 +114,18 @@ public final class BookingMessageProcessingService implements MessageProcessingS
                 send(chatId, "Введите номер телефона для связи.", backKeyboard());
                 break;
             case BOOK_PHONE:
-                String normalizedPhone = normalizeRussianPhone(text);
-                if (normalizedPhone == null) {
+                Optional<String> normalizedPhone = phoneNormalizer.normalize(text);
+                if (normalizedPhone.isEmpty()) {
                     send(chatId, "Не удалось распознать номер. Введите российский номер, например\n" +
                             "+7 999 123-45-67 или 8 999 123-45-67.", backKeyboard());
                     return;
                 }
-                flow.phone = normalizedPhone;
+                flow.phone = normalizedPhone.get();
                 askBookingComment(chatId, flow);
                 break;
             case BOOK_COMMENT:
-                Database.Room selectedRoom = database.getRoom(flow.roomId);
-                if (text.isEmpty() || (selectedRoom != null && selectedRoom.commentRequired && "-".equals(text))) {
+                Room selectedRoom = roomRepository.findById(flow.roomId).orElse(null);
+                if (text.isEmpty() || (selectedRoom != null && selectedRoom.commentRequired() && "-".equals(text))) {
                     send(chatId, "Комментарий не может быть пустым. Опишите, что будете делать.", commentKeyboard());
                     return;
                 }
@@ -99,7 +137,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         }
     }
 
-    private void handleCallback(String data, long chatId) throws SQLException {
+    private void handleCallback(String data, long chatId) {
         long userId = chatId;
         Flow flow = flow(userId);
         String[] parts = data.split(":");
@@ -127,7 +165,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
     /// @param chatId id чата пользователя
     /// @param flow   состояние диалога пользователя
     /// @param item   код пункта меню
-    private void handleMenuAction(long chatId, Flow flow, String item) throws SQLException {
+    private void handleMenuAction(long chatId, Flow flow, String item) {
         switch (item) {
             case "book":
                 beginBooking(chatId, flow);
@@ -144,9 +182,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
                 showMainMenu(chatId);
         }
     }
-
-    private void handleBookingCallback(long chatId, long userId, Flow flow, String[] parts)
-            throws SQLException {
+    private void handleBookingCallback(long chatId, long userId, Flow flow, String[] parts) {
         if ("base".equals(parts[1])) {
             flow.clearBooking();
             flow.baseId = Long.parseLong(parts[2]);
@@ -178,15 +214,17 @@ public final class BookingMessageProcessingService implements MessageProcessingS
             flow.step = Step.BOOK_NAME;
             send(chatId, "Введите имя для связи.", backKeyboard());
         } else if ("skip".equals(parts[1]) && flow.step == Step.BOOK_COMMENT) {
-            Database.Room room = database.getRoom(flow.roomId);
-            if (room != null && !room.commentRequired) {
+            Room room = roomRepository.findById(flow.roomId).orElse(null);
+            if (room != null && !room.commentRequired()) {
                 flow.comment = "";
                 showBookingConfirmation(chatId, flow);
             }
         } else if ("confirm".equals(parts[1]) && flow.step == Step.BOOK_CONFIRM) {
             LocalDateTime start = flow.bookingDate.atTime(flow.startHour, 0);
-            boolean created = database.createBooking(flow.roomId, userId, start, flow.hours,
-                    flow.name, flow.phone, flow.comment == null ? "" : flow.comment);
+            Base base = baseRepository.findById(flow.baseId).orElse(null);
+            boolean created = base != null && rules.canBook(base, start, flow.hours)
+                    && bookingRepository.addIfFree(new Booking(flow.roomId, userId, start, flow.hours,
+                    flow.name, flow.phone, flow.comment == null ? "" : flow.comment));
             if (created) {
                 flow.clearBooking();
                 flow.step = Step.MENU;
@@ -205,8 +243,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         }
     }
 
-    private void handleAboutCallback(long chatId, Flow flow, String[] parts)
-            throws SQLException {
+    private void handleAboutCallback(long chatId, Flow flow, String[] parts) {
         if ("base".equals(parts[1])) {
             showBaseInformation(chatId, Long.parseLong(parts[2]));
         } else if ("list".equals(parts[1])) {
@@ -214,28 +251,28 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         }
     }
 
-    private void beginBooking(long chatId, Flow flow) throws SQLException {
+    private void beginBooking(long chatId, Flow flow) {
         flow.clearBooking();
         flow.step = Step.BOOK_BASES;
-        List<Database.Base> bases = database.getBases();
+        List<Base> bases = baseRepository.findAll();
         if (bases.isEmpty()) {
             send(chatId, "Пока нет доступных баз для бронирования.", choices(button(BACK, "menu:home")));
             return;
         }
         List<List<Button>> rows = new ArrayList<List<Button>>();
-        for (Database.Base base : bases) {
-            addButton(rows, button(base.name, "book:base:" + base.id), 2);
+        for (Base base : bases) {
+            addButton(rows, button(base.name(), "book:base:" + base.id()), 2);
         }
         rows.add(row(button(BACK, "menu:home")));
         send(chatId, "Выберите базу:", markup(rows));
     }
 
-    private void showRoomChoices(long chatId, Flow flow) throws SQLException {
+    private void showRoomChoices(long chatId, Flow flow) {
         flow.step = Step.BOOK_ROOMS;
-        List<Database.Room> rooms = database.getRooms(flow.baseId);
+        List<Room> rooms = roomRepository.findByBaseId(flow.baseId);
         List<List<Button>> rows = new ArrayList<List<Button>>();
-        for (Database.Room room : rooms) {
-            addButton(rows, button(room.name, "book:room:" + room.id), 2);
+        for (Room room : rooms) {
+            addButton(rows, button(room.name(), "book:room:" + room.id()), 2);
         }
         rows.add(row(button(BACK, "menu:book")));
         if (rooms.isEmpty()) {
@@ -245,20 +282,20 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         }
     }
 
-    private void showMonthChoices(long chatId, Flow flow) throws SQLException {
+    private void showMonthChoices(long chatId, Flow flow) {
         flow.step = Step.BOOK_MONTH;
-        Database.Base base = database.getBase(flow.baseId);
+        Base base = baseRepository.findById(flow.baseId).orElse(null);
         if (base == null) {
             beginBooking(chatId, flow);
             return;
         }
-        YearMonth current = YearMonth.now(ZoneId.of(base.timezone));
+        YearMonth current = YearMonth.from(rules.today(base));
         List<List<Button>> rows = new ArrayList<List<Button>>();
         int count = 0;
         for (int offset = 0; offset < 6; offset++) {
             YearMonth month = current.plusMonths(flow.monthOffset + offset);
             if (monthHasAvailability(base, flow.roomId, month)) {
-                addButton(rows, button(capitalize(month.format(MONTH)), "book:month:" + month), 2);
+                addButton(rows, button(formatter.monthYear(month), "book:month:" + month), 2);
                 count++;
             }
         }
@@ -268,7 +305,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         }
         navigation.add(button("Следующие", "book:months:" + (flow.monthOffset + 6)));
         rows.add(navigation);
-        rows.add(row(button(BACK, "book:base:" + base.id)));
+        rows.add(row(button(BACK, "book:base:" + base.id())));
         if (count == 0) {
             send(chatId, "В этих месяцах нет доступных дат.", markup(rows));
         } else {
@@ -276,10 +313,9 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         }
     }
 
-    private void showWeekChoices(long chatId, Flow flow, YearMonth month)
-            throws SQLException {
+    private void showWeekChoices(long chatId, Flow flow, YearMonth month) {
         flow.step = Step.BOOK_WEEK;
-        Database.Base base = database.getBase(flow.baseId);
+        Base base = baseRepository.findById(flow.baseId).orElse(null);
         LocalDate cursor = month.atDay(1);
         int count = 0;
         List<List<Button>> rows = new ArrayList<List<Button>>();
@@ -289,7 +325,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
                 end = month.atEndOfMonth();
             }
             if (rangeHasAvailability(base, flow.roomId, cursor, end)) {
-                String label = cursor.getDayOfMonth() + "-" + end.format(DateTimeFormatter.ofPattern("d MMM", RU));
+                String label = formatter.weekRange(cursor, end);
                 addButton(rows, button(label, "book:week:" + cursor), 2);
                 count++;
             }
@@ -303,9 +339,9 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         }
     }
 
-    private void showDayChoices(long chatId, Flow flow) throws SQLException {
+    private void showDayChoices(long chatId, Flow flow) {
         flow.step = Step.BOOK_DAY;
-        Database.Base base = database.getBase(flow.baseId);
+        Base base = baseRepository.findById(flow.baseId).orElse(null);
         LocalDate start = flow.selectedWeek;
         LocalDate end = start.with(TemporalAdjusters.nextOrSame(DayOfWeek.SUNDAY));
         if (end.getMonthValue() != start.getMonthValue()) {
@@ -314,7 +350,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         List<List<Button>> rows = new ArrayList<List<Button>>();
         for (LocalDate date = start; !date.isAfter(end); date = date.plusDays(1)) {
             if (dateHasAvailability(base, flow.roomId, date)) {
-                String label = date.getDayOfWeek().getDisplayName(TextStyle.SHORT, RU) + ", " + date.format(DATE);
+                String label = formatter.dayAndDate(date);
                 addButton(rows, button(label, "book:day:" + date), 2);
             }
         }
@@ -322,29 +358,29 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         send(chatId, rows.size() == 1 ? "В этой неделе нет доступных дней." : "Выберите день:", markup(rows));
     }
 
-    private void showTimeChoices(long chatId, Flow flow) throws SQLException {
+    private void showTimeChoices(long chatId, Flow flow) {
         flow.step = Step.BOOK_TIME;
-        Database.Base base = database.getBase(flow.baseId);
-        Database.Room room = database.getRoom(flow.roomId);
+        Base base = baseRepository.findById(flow.baseId).orElse(null);
+        Room room = roomRepository.findById(flow.roomId).orElse(null);
         List<List<Button>> rows = new ArrayList<List<Button>>();
         if (base != null && room != null) {
             for (int hour : availableStarts(base, room, flow.bookingDate)) {
-                addButton(rows, button(formatHour(hour), "book:time:" + flow.bookingDate + ":" + hour), 4);
+                addButton(rows, button(formatter.hour(hour), "book:time:" + flow.bookingDate + ":" + hour), 4);
             }
         }
         rows.add(row(button(BACK, "book:week:" + flow.selectedWeek)));
         send(chatId, rows.size() == 1 ? "На этот день свободного времени нет." : "Выберите время начала:", markup(rows));
     }
 
-    private void showDurationChoices(long chatId, Flow flow) throws SQLException {
+    private void showDurationChoices(long chatId, Flow flow) {
         flow.step = Step.BOOK_DURATION;
-        Database.Base base = database.getBase(flow.baseId);
-        int[] hours = base == null ? null : database.getOpeningHours(base.id, flow.bookingDate.getDayOfWeek().getValue());
+        Base base = baseRepository.findById(flow.baseId).orElse(null);
+        OpeningHours hours = base == null ? null : base.hoursOn(flow.bookingDate.getDayOfWeek()).orElse(null);
         List<List<Button>> rows = new ArrayList<List<Button>>();
         if (hours != null) {
             LocalDateTime start = flow.bookingDate.atTime(flow.startHour, 0);
-            for (int duration = 1; duration <= hours[1] - flow.startHour; duration++) {
-                if (!database.hasRoomConflict(flow.roomId, start, start.plusHours(duration))) {
+            for (int duration = 1; duration <= hours.closeHour() - flow.startHour; duration++) {
+                if (!bookingRepository.hasConflict(flow.roomId, start, start.plusHours(duration))) {
                     addButton(rows, button(String.valueOf(duration), "book:hours:" + duration), 6);
                 }
             }
@@ -353,23 +389,23 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         send(chatId, rows.size() == 1 ? "До закрытия или свободного времени зала осталось меньше часа." : "Сколько часов?", markup(rows));
     }
 
-    private void askBookingComment(long chatId, Flow flow) throws SQLException {
-        Database.Room room = database.getRoom(flow.roomId);
+    private void askBookingComment(long chatId, Flow flow) {
+        Room room = roomRepository.findById(flow.roomId).orElse(null);
         if (room == null) {
             beginBooking(chatId, flow);
             return;
         }
         flow.step = Step.BOOK_COMMENT;
-        String prompt = room.commentRequired
+        String prompt = room.commentRequired()
                 ? "Опишите, что будете делать в зале. Например, запись барабанов и баса."
                 : "Оставьте комментарий к записи (необязательно). Например, что нужно подключить.";
-        send(chatId, prompt, room.commentRequired ? backKeyboard() : commentKeyboard());
+        send(chatId, prompt, room.commentRequired() ? backKeyboard() : commentKeyboard());
     }
 
-    private void showBookingConfirmation(long chatId, Flow flow) throws SQLException {
-        Database.Base base = database.getBase(flow.baseId);
-        Database.Room room = database.getRoom(flow.roomId);
-        if (base == null || room == null || (room.commentRequired && (flow.comment == null || flow.comment.isEmpty()))) {
+    private void showBookingConfirmation(long chatId, Flow flow) {
+        Base base = baseRepository.findById(flow.baseId).orElse(null);
+        Room room = roomRepository.findById(flow.roomId).orElse(null);
+        if (base == null || room == null || (room.commentRequired() && (flow.comment == null || flow.comment.isEmpty()))) {
             send(chatId, "В этом зале комментарий обязателен. Опишите, что будете делать.", backKeyboard());
             flow.step = Step.BOOK_COMMENT;
             return;
@@ -377,69 +413,68 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         LocalDateTime start = flow.bookingDate.atTime(flow.startHour, 0);
         LocalDateTime end = start.plusHours(flow.hours);
         flow.step = Step.BOOK_CONFIRM;
-        String text = "Проверьте:\nБаза «" + base.name + "», " + room.name + ", " +
-                formatDateTime(start) + "-" + formatEnd(start, end) + ".\n" +
+        String text = "Проверьте:\nБаза «" + base.name() + "», " + room.name() + ", " +
+                formatter.dateTime(start) + "-" + formatter.endTime(start, end) + ".\n" +
                 "Имя: " + flow.name + "\nТелефон: " + flow.phone + "\nКомментарий: " +
                 (flow.comment == null || flow.comment.isEmpty() ? "—" : flow.comment);
         send(chatId, text, choices(button("Подтвердить", "book:confirm"),
                 button(BACK, "back"), button("Отмена", "book:cancel")));
     }
 
-    private void showMyBookings(long chatId, long userId) throws SQLException {
-        List<Database.Booking> bookings = database.getUpcomingBookings(userId);
-        if (bookings.isEmpty()) {
-            sendMainMenu(chatId, "У вас пока нет будущих записей.");
-            return;
-        }
+    private void showMyBookings(long chatId, long userId) {
         StringBuilder text = new StringBuilder("Ваши будущие записи:\n");
-        for (Database.Booking booking : bookings) {
-            LocalDateTime end = booking.start.plusHours(booking.hours);
-            text.append("• ").append(booking.baseName).append(", ").append(booking.roomName).append(", ")
-                    .append(formatDateTime(booking.start)).append("-").append(formatEnd(booking.start, end))
-                    .append("\n");
+        boolean hasBookings = false;
+        for (Booking booking : bookingRepository.findByUser(userId)) {
+            Room room = roomRepository.findById(booking.roomId()).orElse(null);
+            Base base = room == null ? null : baseRepository.findById(room.baseId()).orElse(null);
+            if (base == null || !rules.isUpcoming(base, booking)) {
+                continue;
+            }
+            hasBookings = true;
+            text.append("• ").append(base.name()).append(", ").append(room.name()).append(", ")
+                    .append(formatter.dateTime(booking.start())).append("-")
+                    .append(formatter.endTime(booking.start(), booking.end())).append("\n");
         }
-        sendMainMenu(chatId, text.toString());
+        sendMainMenu(chatId, hasBookings ? text.toString() : "У вас пока нет будущих записей.");
     }
 
-    private void showAboutBases(long chatId) throws SQLException {
-        List<Database.Base> bases = database.getBases();
+    private void showAboutBases(long chatId) {
+        List<Base> bases = baseRepository.findAll();
         if (bases.isEmpty()) {
             send(chatId, "Пока нет доступных баз.", choices(button(BACK, "menu:home")));
             return;
         }
         List<List<Button>> rows = new ArrayList<List<Button>>();
-        for (Database.Base base : bases) {
-            addButton(rows, button(base.name, "about:base:" + base.id), 2);
+        for (Base base : bases) {
+            addButton(rows, button(base.name(), "about:base:" + base.id()), 2);
         }
         rows.add(row(button(BACK, "menu:home")));
         send(chatId, "Выберите базу:", markup(rows));
     }
 
-    private void showBaseInformation(long chatId, long baseId) throws SQLException {
-        Database.Base base = database.getBase(baseId);
+    private void showBaseInformation(long chatId, long baseId) {
+        Base base = baseRepository.findById(baseId).orElse(null);
         if (base == null) {
             showAboutBases(chatId);
             return;
         }
-        StringBuilder text = new StringBuilder("База «").append(base.name).append("»\nАдрес: ")
-                .append(base.address).append("\nЧасовой пояс: ").append(base.timezone).append("\n");
+        StringBuilder text = new StringBuilder("База «").append(base.name()).append("»\nАдрес: ")
+                .append(base.address()).append("\nЧасовой пояс: ").append(base.timezone()).append("\n");
         for (int day = 1; day <= 7; day++) {
-            int[] hours = database.getOpeningHours(base.id, day);
-            text.append(DAY_NAMES[day - 1]).append(": ")
-                    .append(hours == null ? "выходной" : formatHour(hours[0]) + "-" + formatHour(hours[1]))
+            OpeningHours hours = base.hoursOn(DayOfWeek.of(day)).orElse(null);
+            text.append(formatter.dayName(DayOfWeek.of(day))).append(": ")
+                    .append(hours == null ? "выходной" : formatter.hour(hours.openHour()) + "-" + formatter.hour(hours.closeHour()))
                     .append(day == 7 ? "\n" : ", ");
         }
-        text.append("Оборудование:\n").append(base.equipment.isEmpty() ? "не указано" : base.equipment);
+        text.append("Оборудование:\n").append(base.equipment().isEmpty() ? "не указано" : base.equipment());
         send(chatId, text.toString(), choices(button(BACK, "about:list")));
     }
 
-    private boolean monthHasAvailability(Database.Base base, long roomId, YearMonth month)
-            throws SQLException {
+    private boolean monthHasAvailability(Base base, long roomId, YearMonth month) {
         return rangeHasAvailability(base, roomId, month.atDay(1), month.atEndOfMonth());
     }
 
-    private boolean rangeHasAvailability(Database.Base base, long roomId, LocalDate start, LocalDate end)
-            throws SQLException {
+    private boolean rangeHasAvailability(Base base, long roomId, LocalDate start, LocalDate end) {
         for (LocalDate date = start; !date.isAfter(end); date = date.plusDays(1)) {
             if (dateHasAvailability(base, roomId, date)) {
                 return true;
@@ -448,32 +483,31 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         return false;
     }
 
-    private boolean dateHasAvailability(Database.Base base, long roomId, LocalDate date) throws SQLException {
-        Database.Room room = database.getRoom(roomId);
+    private boolean dateHasAvailability(Base base, long roomId, LocalDate date) {
+        Room room = roomRepository.findById(roomId).orElse(null);
         return room != null && !availableStarts(base, room, date).isEmpty();
     }
 
-    private List<Integer> availableStarts(Database.Base base, Database.Room room, LocalDate date)
-            throws SQLException {
-        int[] hours = database.getOpeningHours(base.id, date.getDayOfWeek().getValue());
+    private List<Integer> availableStarts(Base base, Room room, LocalDate date) {
+        OpeningHours hours = base.hoursOn(date.getDayOfWeek()).orElse(null);
         if (hours == null) {
             return Collections.emptyList();
         }
         List<Integer> result = new ArrayList<Integer>();
-        ZonedDateTime earliest = ZonedDateTime.now(ZoneId.of(base.timezone)).plusHours(base.bookingLeadHours);
-        for (int hour = hours[0]; hour < hours[1]; hour++) {
+        ZonedDateTime earliest = rules.earliestStart(base);
+        for (int hour = hours.openHour(); hour < hours.closeHour(); hour++) {
             LocalDateTime start = date.atTime(hour, 0);
-            if (start.atZone(ZoneId.of(base.timezone)).isBefore(earliest)) {
+            if (start.atZone(ZoneId.of(base.timezone())).isBefore(earliest)) {
                 continue;
             }
-            if (!database.hasRoomConflict(room.id, start, start.plusHours(1))) {
+            if (!bookingRepository.hasConflict(room.id(), start, start.plusHours(1))) {
                 result.add(hour);
             }
         }
         return result;
     }
 
-    private void back(long chatId, Flow flow) throws SQLException {
+    private void back(long chatId, Flow flow) {
         switch (flow.step) {
             case BOOK_BASES:
             case MENU:
@@ -536,44 +570,13 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         send(chatId, "Здравствуйте! Что хотите сделать?", rows);
     }
 
-    private void sendMainMenu(long chatId, String notice) {
+    private void sendMainMenu(long chatId, String notice)  {
         send(chatId, notice, null);
         showMainMenu(chatId);
     }
 
     private Flow flow(long userId) {
         return flows.computeIfAbsent(userId, id -> new Flow());
-    }
-
-    private String normalizeRussianPhone(String input) {
-        String trimmed = input.trim();
-        Matcher matcher = RUSSIAN_PHONE.matcher(trimmed);
-        if (!matcher.matches()) {
-            return null;
-        }
-        return "+7" + matcher.group(1) + matcher.group(2) + matcher.group(3) + matcher.group(4);
-    }
-
-    private String formatDateTime(LocalDateTime dateTime) {
-        return dateTime.format(DateTimeFormatter.ofPattern("EEE d MMM, H:mm", RU));
-    }
-
-    private String formatEnd(LocalDateTime start, LocalDateTime end) {
-        if (end.getHour() == 0 && end.toLocalDate().isAfter(start.toLocalDate())) {
-            return "24:00";
-        }
-        return formatHour(end.getHour());
-    }
-
-    private String formatHour(int hour) {
-        return String.valueOf(hour) + ":00";
-    }
-
-    private String capitalize(String value) {
-        if (value.isEmpty()) {
-            return value;
-        }
-        return value.substring(0, 1).toUpperCase(RU) + value.substring(1);
     }
 
     private void send(long chatId, String text, List<List<Button>> keyboard) {
@@ -614,42 +617,5 @@ public final class BookingMessageProcessingService implements MessageProcessingS
 
     private List<List<Button>> markup(List<List<Button>> rows) {
         return rows;
-    }
-
-    private enum Step {
-        MENU, BOOK_BASES, BOOK_ROOMS, BOOK_MONTH, BOOK_WEEK, BOOK_DAY, BOOK_TIME, BOOK_DURATION,
-        BOOK_NAME, BOOK_PHONE, BOOK_COMMENT, BOOK_CONFIRM
-    }
-
-    private static final class Flow {
-        Step step = Step.MENU;
-        long baseId;
-        long roomId;
-        String name;
-        String phone;
-        String comment;
-        YearMonth selectedMonth;
-        LocalDate selectedWeek;
-        LocalDate bookingDate;
-        int startHour;
-        int hours;
-        int monthOffset;
-
-        Flow() {
-        }
-
-        void clearBooking() {
-            baseId = 0;
-            roomId = 0;
-            bookingDate = null;
-            startHour = 0;
-            hours = 0;
-            name = null;
-            phone = null;
-            comment = null;
-            selectedMonth = null;
-            selectedWeek = null;
-            monthOffset = 0;
-        }
     }
 }
