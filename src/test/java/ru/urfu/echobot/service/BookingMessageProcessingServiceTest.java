@@ -1,14 +1,11 @@
 package ru.urfu.echobot.service;
 
+import java.nio.file.Path;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import ru.urfu.echobot.bot.DummyBot;
-
-import java.nio.file.Path;
-import java.util.List;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /// Тесты диалогов бронирования без Telegram.
 final class BookingMessageProcessingServiceTest {
@@ -39,7 +36,10 @@ final class BookingMessageProcessingServiceTest {
     void startShowsMainMenuButtons() {
         service.processMessage(Message.builder().text("/start").build(), CLIENT_ID, bot);
 
-        assertEquals(List.of("Забронировать", "Мои записи", "О базе"), buttonTexts(bot.lastMessage()));
+        org.junit.jupiter.api.Assertions.assertEquals(
+                List.of("Забронировать", "Мои записи", "О базе"),
+                buttonTexts(bot.lastMessage())
+        );
     }
 
     /// Собирает подписи всех кнопок сообщения в один список.

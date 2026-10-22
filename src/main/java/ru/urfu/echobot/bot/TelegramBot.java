@@ -1,5 +1,7 @@
 package ru.urfu.echobot.bot;
 
+import java.util.ArrayList;
+import java.util.List;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,8 +20,6 @@ import org.telegram.telegrambots.meta.generics.TelegramClient;
 import ru.urfu.echobot.service.Button;
 import ru.urfu.echobot.service.Message;
 import ru.urfu.echobot.service.MessageProcessingService;
-import java.util.ArrayList;
-import java.util.List;
 
 /// Telegram-бот, который принимает текст и нажатия кнопок и отправляет сообщения с кнопками.
 public final class TelegramBot extends DefaultLongPollingUpdateConsumer implements Bot {
