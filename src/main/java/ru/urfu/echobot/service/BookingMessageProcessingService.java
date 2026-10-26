@@ -311,7 +311,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
     private void selectMonth(CallbackContext context) {
         YearMonth selectedMonth = YearMonth.parse(context.parts()[callbackPartsWithoutArgument]);
         context.flow().selectedMonth = selectedMonth;
-        selectionService.showWeekChoices(context.chatId(), context.flow(), month, transport);
+        selectionService.showWeekChoices(context.chatId(), context.flow(), selectedMonth, transport);
     }
 
     /// Выбирает неделю и показывает доступные дни.
