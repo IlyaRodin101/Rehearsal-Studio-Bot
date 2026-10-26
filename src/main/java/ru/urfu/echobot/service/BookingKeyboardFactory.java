@@ -1,6 +1,5 @@
 package ru.urfu.echobot.service;
 
-import ru.urfu.echobot.service.Button;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -12,6 +11,7 @@ public final class BookingKeyboardFactory {
     private static final String BACK = "Назад";
     /// Код callback для возврата на предыдущий шаг.
     private static final String CALLBACK_BACK = "back";
+
 
     /// Создаёт клавиатуру, размещая каждую кнопку в отдельной строке.
     ///
@@ -41,7 +41,7 @@ public final class BookingKeyboardFactory {
 
     /// Создаёт кнопку с подписью и callback-данными.
     ///
-    /// @param text подпись кнопки
+    /// @param text     подпись кнопки
     /// @param callback callback-данные кнопки
     /// @return созданная кнопка
     public Button button(String text, String callback) {
@@ -58,9 +58,9 @@ public final class BookingKeyboardFactory {
 
     /// Добавляет кнопку в последнюю строку или создаёт для неё новую.
     ///
-    /// @param rows строки клавиатуры
+    /// @param rows   строки клавиатуры
     /// @param button добавляемая кнопка
-    /// @param size максимальное число кнопок в строке
+    /// @param size   максимальное число кнопок в строке
     public void addButton(List<List<Button>> rows, Button button, int size) {
         if (rows.isEmpty() || rows.get(rows.size() - 1).size() >= size) {
             rows.add(new ArrayList<>());

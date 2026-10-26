@@ -33,7 +33,25 @@ public final class BookingMessageProcessingService implements MessageProcessingS
     private static final String MENU_HOME = "menu:home";
     /// Индекс часа начала в частях callback-данных.
     private static final int START_HOUR_PART = 3;
-
+    /// строковые константы, чтобы не ругался checkstyle
+    private final String room = "room";
+    private final String months = "months";
+    private final String month = "month";
+    private final String week = "week";
+    private final String day = "day";
+    private final String time = "time";
+    private final String hours = "hours";
+    private final String skip = "skip";
+    private final String confirm = "confirm";
+    private final String cancel = "cancel";
+    private final String list = "list";
+    /// целочисленные константы, чтобы не ругался checkstyle
+    /// Минимальное количество частей callback с идентификатором
+    private final int callbackPartsWithId = 3;
+    /// Минимальное количество частей callback для выбора времени
+    private final int callbackPartsForTime = 4;
+    /// Минимальное количество частей callback без дополнительного аргумента.
+    private final int callbackPartsWithoutArgument = 2;
     /// Собирает кнопки и клавиатуры для сообщений.
     private final BookingKeyboardFactory keyboards = new BookingKeyboardFactory();
     /// Обрабатывает кнопочные этапы выбора слота бронирования.
@@ -67,10 +85,10 @@ public final class BookingMessageProcessingService implements MessageProcessingS
 
     /// Создаёт обработчик сообщений с необходимыми репозиториями и правилами бронирования.
     ///
-    /// @param baseRepository репозиторий баз
-    /// @param roomRepository репозиторий залов
+    /// @param baseRepository    репозиторий баз
+    /// @param roomRepository    репозиторий залов
     /// @param bookingRepository репозиторий бронирований
-    /// @param rules правила бронирования
+    /// @param rules             правила бронирования
     public BookingMessageProcessingService(BaseRepository baseRepository, RoomRepository roomRepository,
                                            BookingRepository bookingRepository, BookingRules rules) {
         BookingAvailabilityService availabilityService =
@@ -81,7 +99,8 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         this.informationService = new BookingInformationService(baseRepository, roomRepository, bookingRepository,
                 rules, formatter, keyboards);
         this.formService = new BookingFormService(baseRepository, roomRepository, bookingRepository, rules,
-                new PhoneNormalizer(), formatter, keyboards, selectionService);
+                new FormUtilities(new PhoneNormalizer(), formatter),
+                keyboards, selectionService);
         callbackHandlers = new HashMap<>();
         callbackHandlers.put(CALLBACK_BACK, context -> back(context.chatId(), context.flow()));
         callbackHandlers.put("menu", this::handleMenuAction);
@@ -99,37 +118,37 @@ public final class BookingMessageProcessingService implements MessageProcessingS
 
         bookingActionHandlers = new HashMap<>();
         bookingActionHandlers.put(CALLBACK_BASE, this::selectBase);
-        bookingActionHandlers.put("room", this::selectRoom);
-        bookingActionHandlers.put("months", this::selectMonths);
-        bookingActionHandlers.put("month", this::selectMonth);
-        bookingActionHandlers.put("week", this::selectWeek);
-        bookingActionHandlers.put("day", this::selectDay);
-        bookingActionHandlers.put("time", this::selectTime);
-        bookingActionHandlers.put("hours", this::selectHours);
-        bookingActionHandlers.put("skip", this::handleSkipComment);
-        bookingActionHandlers.put("confirm", this::handleConfirmation);
-        bookingActionHandlers.put("cancel", context -> returnToMenu(context.chatId(), context.flow()));
+        bookingActionHandlers.put(room, this::selectRoom);
+        bookingActionHandlers.put(months, this::selectMonths);
+        bookingActionHandlers.put(month, this::selectMonth);
+        bookingActionHandlers.put(week, this::selectWeek);
+        bookingActionHandlers.put(day, this::selectDay);
+        bookingActionHandlers.put(time, this::selectTime);
+        bookingActionHandlers.put(hours, this::selectHours);
+        bookingActionHandlers.put(skip, this::handleSkipComment);
+        bookingActionHandlers.put(confirm, this::handleConfirmation);
+        bookingActionHandlers.put(cancel, context -> returnToMenu(context.chatId(), context.flow()));
 
         bookingCallbackPartCounts = new HashMap<>();
-        bookingCallbackPartCounts.put(CALLBACK_BASE, 3);
-        bookingCallbackPartCounts.put("room", 3);
-        bookingCallbackPartCounts.put("months", 3);
-        bookingCallbackPartCounts.put("month", 3);
-        bookingCallbackPartCounts.put("week", 3);
-        bookingCallbackPartCounts.put("day", 3);
-        bookingCallbackPartCounts.put("time", 4);
-        bookingCallbackPartCounts.put("hours", 3);
-        bookingCallbackPartCounts.put("skip", 2);
-        bookingCallbackPartCounts.put("confirm", 2);
-        bookingCallbackPartCounts.put("cancel", 2);
+        bookingCallbackPartCounts.put(CALLBACK_BASE, callbackPartsWithId);
+        bookingCallbackPartCounts.put(room, callbackPartsWithId);
+        bookingCallbackPartCounts.put(months, callbackPartsWithId);
+        bookingCallbackPartCounts.put(month, callbackPartsWithId);
+        bookingCallbackPartCounts.put(week, callbackPartsWithId);
+        bookingCallbackPartCounts.put(day, callbackPartsWithId);
+        bookingCallbackPartCounts.put(time, callbackPartsForTime);
+        bookingCallbackPartCounts.put(hours, callbackPartsWithId);
+        bookingCallbackPartCounts.put(skip, callbackPartsWithoutArgument);
+        bookingCallbackPartCounts.put(confirm, callbackPartsWithoutArgument);
+        bookingCallbackPartCounts.put(cancel, callbackPartsWithoutArgument);
 
         aboutActionHandlers = new HashMap<>();
         aboutActionHandlers.put(CALLBACK_BASE, this::showSelectedBaseInformation);
-        aboutActionHandlers.put("list", context -> informationService.showAboutBases(context.chatId(), transport));
+        aboutActionHandlers.put(list, context -> informationService.showAboutBases(context.chatId(), transport));
 
         aboutCallbackPartCounts = new HashMap<>();
-        aboutCallbackPartCounts.put(CALLBACK_BASE, 3);
-        aboutCallbackPartCounts.put("list", 2);
+        aboutCallbackPartCounts.put(CALLBACK_BASE, callbackPartsWithId);
+        aboutCallbackPartCounts.put(list, callbackPartsWithoutArgument);
 
         textCommandHandlers = new HashMap<>();
         textCommandHandlers.put("/start", context -> returnToMenu(context.chatId(), context.flow()));
@@ -170,9 +189,9 @@ public final class BookingMessageProcessingService implements MessageProcessingS
 
     /// Обрабатывает входящее сообщение или callback и отправляет ответ через указанного бота.
     ///
-    /// @param msg входящее сообщение
+    /// @param msg    входящее сообщение
     /// @param chatId идентификатор чата пользователя
-    /// @param bot бот для отправки ответов
+    /// @param bot    бот для отправки ответов
     @Override
     public void processMessage(@NotNull Message msg, long chatId, @NotNull Bot bot) {
         transport = bot;
@@ -186,7 +205,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
     /// Обрабатывает текст пользователя в соответствии с текущим шагом диалога.
     ///
     /// @param rawText исходный текст сообщения
-    /// @param chatId идентификатор чата пользователя
+    /// @param chatId  идентификатор чата пользователя
     private void handleText(String rawText, long chatId) {
         BookingFlow flow = flow(chatId);
         String text = rawText.trim();
@@ -204,7 +223,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
 
     /// Ищет обработчик callback-команды по её пространству имён.
     ///
-    /// @param data callback-данные нажатой кнопки
+    /// @param data   callback-данные нажатой кнопки
     /// @param chatId идентификатор чата пользователя
     private void handleCallback(String data, long chatId) {
         String[] parts = data.split(":");
@@ -219,7 +238,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
     ///
     /// @param context контекст callback-команды
     private void handleMenuAction(CallbackContext context) {
-        if (context.parts().length < 2) {
+        if (context.parts().length < callbackPartsWithoutArgument) {
             return;
         }
         Consumer<CallbackContext> handler = menuActionHandlers.get(context.parts()[1]);
@@ -234,7 +253,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
     ///
     /// @param context контекст callback-команды
     private void handleBookingCallback(CallbackContext context) {
-        if (context.parts().length < 2) {
+        if (context.parts().length < callbackPartsWithoutArgument) {
             return;
         }
         String action = context.parts()[1];
@@ -249,7 +268,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
     ///
     /// @param context контекст callback-команды
     private void handleAboutCallback(CallbackContext context) {
-        if (context.parts().length < 2) {
+        if (context.parts().length < callbackPartsWithoutArgument) {
             return;
         }
         String action = context.parts()[1];
@@ -265,7 +284,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
     /// @param context контекст callback-команды
     private void selectBase(CallbackContext context) {
         context.flow().clearBooking();
-        context.flow().baseId = Long.parseLong(context.parts()[2]);
+        context.flow().baseId = Long.parseLong(context.parts()[callbackPartsWithoutArgument]);
         selectionService.showRoomChoices(context.chatId(), context.flow(), transport);
     }
 
@@ -273,7 +292,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
     ///
     /// @param context контекст callback-команды
     private void selectRoom(CallbackContext context) {
-        context.flow().roomId = Long.parseLong(context.parts()[2]);
+        context.flow().roomId = Long.parseLong(context.parts()[callbackPartsWithoutArgument]);
         context.flow().monthOffset = 0;
         selectionService.showMonthChoices(context.chatId(), context.flow(), transport);
     }
@@ -282,7 +301,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
     ///
     /// @param context контекст callback-команды
     private void selectMonths(CallbackContext context) {
-        context.flow().monthOffset = Integer.parseInt(context.parts()[2]);
+        context.flow().monthOffset = Integer.parseInt(context.parts()[callbackPartsWithoutArgument]);
         selectionService.showMonthChoices(context.chatId(), context.flow(), transport);
     }
 
@@ -290,8 +309,8 @@ public final class BookingMessageProcessingService implements MessageProcessingS
     ///
     /// @param context контекст callback-команды
     private void selectMonth(CallbackContext context) {
-        YearMonth month = YearMonth.parse(context.parts()[2]);
-        context.flow().selectedMonth = month;
+        YearMonth selectedMonth = YearMonth.parse(context.parts()[callbackPartsWithoutArgument]);
+        context.flow().selectedMonth = selectedMonth;
         selectionService.showWeekChoices(context.chatId(), context.flow(), month, transport);
     }
 
@@ -299,7 +318,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
     ///
     /// @param context контекст callback-команды
     private void selectWeek(CallbackContext context) {
-        context.flow().bookingDate = LocalDate.parse(context.parts()[2]);
+        context.flow().bookingDate = LocalDate.parse(context.parts()[callbackPartsWithoutArgument]);
         context.flow().selectedWeek = context.flow().bookingDate;
         selectionService.showDayChoices(context.chatId(), context.flow(), transport);
     }
@@ -308,7 +327,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
     ///
     /// @param context контекст callback-команды
     private void selectDay(CallbackContext context) {
-        context.flow().bookingDate = LocalDate.parse(context.parts()[2]);
+        context.flow().bookingDate = LocalDate.parse(context.parts()[callbackPartsWithoutArgument]);
         selectionService.showTimeChoices(context.chatId(), context.flow(), transport);
     }
 
@@ -316,7 +335,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
     ///
     /// @param context контекст callback-команды
     private void selectTime(CallbackContext context) {
-        context.flow().bookingDate = LocalDate.parse(context.parts()[2]);
+        context.flow().bookingDate = LocalDate.parse(context.parts()[callbackPartsWithoutArgument]);
         context.flow().startHour = Integer.parseInt(context.parts()[START_HOUR_PART]);
         selectionService.showDurationChoices(context.chatId(), context.flow(), transport);
     }
@@ -325,7 +344,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
     ///
     /// @param context контекст callback-команды
     private void selectHours(CallbackContext context) {
-        context.flow().hours = Integer.parseInt(context.parts()[2]);
+        context.flow().hours = Integer.parseInt(context.parts()[callbackPartsWithoutArgument]);
         formService.beginCustomerDetails(context.chatId(), context.flow(), transport);
     }
 
@@ -358,13 +377,14 @@ public final class BookingMessageProcessingService implements MessageProcessingS
     ///
     /// @param context контекст callback-команды
     private void showSelectedBaseInformation(CallbackContext context) {
-        informationService.showBaseInformation(context.chatId(), Long.parseLong(context.parts()[2]), transport);
+        informationService.showBaseInformation(context.chatId(),
+                Long.parseLong(context.parts()[callbackPartsWithoutArgument]), transport);
     }
 
     /// Возвращает диалог на предыдущий шаг с помощью карты обработчиков.
     ///
     /// @param chatId идентификатор чата пользователя
-    /// @param flow состояние диалога пользователя
+    /// @param flow   состояние диалога пользователя
     private void back(long chatId, BookingFlow flow) {
         BiConsumer<Long, BookingFlow> handler = backHandlers.get(flow.step);
         if (handler == null) {
@@ -377,7 +397,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
     /// Сбрасывает форму и возвращает пользователя в главное меню.
     ///
     /// @param chatId идентификатор чата пользователя
-    /// @param flow состояние диалога пользователя
+    /// @param flow   состояние диалога пользователя
     private void returnToMenu(long chatId, BookingFlow flow) {
         flow.clearBooking();
         flow.step = BookingFlow.Step.MENU;
@@ -387,7 +407,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
     /// Возвращает пользователя к выбору времени и сбрасывает выбранную длительность.
     ///
     /// @param chatId идентификатор чата пользователя
-    /// @param flow состояние диалога пользователя
+    /// @param flow   состояние диалога пользователя
     private void backFromDuration(long chatId, BookingFlow flow) {
         flow.hours = 0;
         selectionService.showTimeChoices(chatId, flow, transport);
@@ -423,8 +443,8 @@ public final class BookingMessageProcessingService implements MessageProcessingS
 
     /// Отправляет текстовое сообщение с клавиатурой.
     ///
-    /// @param chatId идентификатор чата получателя
-    /// @param text текст сообщения
+    /// @param chatId   идентификатор чата получателя
+    /// @param text     текст сообщения
     /// @param keyboard строки кнопок; null означает сообщение без клавиатуры
     private void send(long chatId, String text, List<List<Button>> keyboard) {
         List<List<Button>> safeKeyboard = keyboard == null ? List.of() : keyboard;
@@ -435,16 +455,16 @@ public final class BookingMessageProcessingService implements MessageProcessingS
     ///
     /// @param chatId идентификатор чата
     /// @param userId идентификатор пользователя
-    /// @param flow состояние пользовательского диалога
-    /// @param parts части callback-команды, разделённые двоеточием
+    /// @param flow   состояние пользовательского диалога
+    /// @param parts  части callback-команды, разделённые двоеточием
     private record CallbackContext(long chatId, long userId, BookingFlow flow, String[] parts) {
     }
 
     /// Данные текстового сообщения, необходимые обработчику текущего шага.
     ///
     /// @param chatId идентификатор чата
-    /// @param flow состояние пользовательского диалога
-    /// @param text текст после удаления внешних пробелов
+    /// @param flow   состояние пользовательского диалога
+    /// @param text   текст после удаления внешних пробелов
     private record TextContext(long chatId, BookingFlow flow, String text) {
     }
 }

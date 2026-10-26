@@ -39,24 +39,23 @@ public final class BookingFormService {
 
     /// Создаёт обработчик данных формы бронирования.
     ///
-    /// @param baseRepository хранилище баз
-    /// @param roomRepository хранилище залов
+    /// @param baseRepository    хранилище баз
+    /// @param roomRepository    хранилище залов
     /// @param bookingRepository хранилище броней
-    /// @param rules правила бронирования
-    /// @param phoneNormalizer нормализатор телефонных номеров
-    /// @param formatter форматер дат и времени
-    /// @param keyboards фабрика клавиатур
-    /// @param selectionService сервис выбора слота
+    /// @param rules             правила бронирования
+    /// @param formUtilities     нормализатор телефонных номеров и форматер дат и времени в едином объекте
+    /// @param keyboards         фабрика клавиатур
+    /// @param selectionService  сервис выбора слота
     public BookingFormService(BaseRepository baseRepository, RoomRepository roomRepository,
                               BookingRepository bookingRepository, BookingRules rules,
-                              PhoneNormalizer phoneNormalizer, RussianDateFormatter formatter,
+                              FormUtilities formUtilities,
                               BookingKeyboardFactory keyboards, BookingSelectionService selectionService) {
         this.baseRepository = baseRepository;
         this.roomRepository = roomRepository;
         this.bookingRepository = bookingRepository;
         this.rules = rules;
-        this.phoneNormalizer = phoneNormalizer;
-        this.formatter = formatter;
+        this.phoneNormalizer = formUtilities.phoneNormalizer;
+        this.formatter = formUtilities.formatter;
         this.keyboards = keyboards;
         this.selectionService = selectionService;
     }
@@ -64,8 +63,8 @@ public final class BookingFormService {
     /// Открывает шаг ввода контактных данных после выбора длительности брони.
     ///
     /// @param chatId идентификатор Telegram-чата
-    /// @param flow состояние диалога
-    /// @param bot бот для отправки сообщения
+    /// @param flow   состояние диалога
+    /// @param bot    бот для отправки сообщения
     public void beginCustomerDetails(long chatId, BookingFlow flow, Bot bot) {
         flow.step = BookingFlow.Step.BOOK_NAME;
         send(bot, chatId, ENTER_NAME, keyboards.backKeyboard());
@@ -74,9 +73,9 @@ public final class BookingFormService {
     /// Проверяет имя клиента и переводит форму к вводу номера телефона.
     ///
     /// @param chatId идентификатор Telegram-чата
-    /// @param flow состояние диалога
-    /// @param text введённый текст
-    /// @param bot бот для отправки сообщения
+    /// @param flow   состояние диалога
+    /// @param text   введённый текст
+    /// @param bot    бот для отправки сообщения
     public void handleNameText(long chatId, BookingFlow flow, String text, Bot bot) {
         if (text.isEmpty()) {
             send(bot, chatId, ENTER_NAME, keyboards.backKeyboard());
@@ -90,9 +89,9 @@ public final class BookingFormService {
     /// Проверяет и сохраняет номер телефона клиента.
     ///
     /// @param chatId идентификатор Telegram-чата
-    /// @param flow состояние диалога
-    /// @param text введённый номер
-    /// @param bot бот для отправки сообщения
+    /// @param flow   состояние диалога
+    /// @param text   введённый номер
+    /// @param bot    бот для отправки сообщения
     public void handlePhoneText(long chatId, BookingFlow flow, String text, Bot bot) {
         Optional<String> normalizedPhone = phoneNormalizer.normalize(text);
         if (normalizedPhone.isEmpty()) {
@@ -107,9 +106,9 @@ public final class BookingFormService {
     /// Проверяет комментарий и открывает страницу подтверждения бронирования.
     ///
     /// @param chatId идентификатор Telegram-чата
-    /// @param flow состояние диалога
-    /// @param text комментарий клиента
-    /// @param bot бот для отправки сообщения
+    /// @param flow   состояние диалога
+    /// @param text   комментарий клиента
+    /// @param bot    бот для отправки сообщения
     public void handleCommentText(long chatId, BookingFlow flow, String text, Bot bot) {
         Room selectedRoom = roomRepository.findById(flow.roomId).orElse(null);
         if (text.isEmpty() || (selectedRoom != null && selectedRoom.commentRequired() && "-".equals(text))) {
@@ -124,8 +123,8 @@ public final class BookingFormService {
     /// Разрешает пропустить комментарий только для зала, где он необязателен.
     ///
     /// @param chatId идентификатор Telegram-чата
-    /// @param flow состояние диалога
-    /// @param bot бот для отправки сообщения
+    /// @param flow   состояние диалога
+    /// @param bot    бот для отправки сообщения
     public void skipBookingComment(long chatId, BookingFlow flow, Bot bot) {
         Room room = roomRepository.findById(flow.roomId).orElse(null);
         if (flow.step == BookingFlow.Step.BOOK_COMMENT && room != null && !room.commentRequired()) {
@@ -137,7 +136,7 @@ public final class BookingFormService {
     /// Создаёт бронь, если время всё ещё свободно и соответствует правилам базы.
     ///
     /// @param userId идентификатор пользователя, которому принадлежит бронь
-    /// @param flow заполненное состояние диалога
+    /// @param flow   заполненное состояние диалога
     /// @return true, если бронь сохранена; false, если слот недоступен
     public boolean confirmBooking(long userId, BookingFlow flow) {
         LocalDateTime start = flow.bookingDate.atTime(flow.startHour, 0);
@@ -150,8 +149,8 @@ public final class BookingFormService {
     /// Возвращает пользователя к выбору длительности и очищает введённые данные клиента.
     ///
     /// @param chatId идентификатор Telegram-чата
-    /// @param flow состояние диалога
-    /// @param bot бот для отправки сообщения
+    /// @param flow   состояние диалога
+    /// @param bot    бот для отправки сообщения
     public void backFromName(long chatId, BookingFlow flow, Bot bot) {
         clearCustomerDetails(flow);
         selectionService.showDurationChoices(chatId, flow, bot);
@@ -160,8 +159,8 @@ public final class BookingFormService {
     /// Возвращает пользователя к вводу имени и очищает все введённые данные клиента.
     ///
     /// @param chatId идентификатор Telegram-чата
-    /// @param flow состояние диалога
-    /// @param bot бот для отправки сообщения
+    /// @param flow   состояние диалога
+    /// @param bot    бот для отправки сообщения
     public void backToName(long chatId, BookingFlow flow, Bot bot) {
         clearCustomerDetails(flow);
         flow.step = BookingFlow.Step.BOOK_NAME;
@@ -171,8 +170,8 @@ public final class BookingFormService {
     /// Запрашивает комментарий с учётом обязательности для выбранного зала.
     ///
     /// @param chatId идентификатор Telegram-чата
-    /// @param flow состояние диалога
-    /// @param bot бот для отправки сообщения
+    /// @param flow   состояние диалога
+    /// @param bot    бот для отправки сообщения
     private void askBookingComment(long chatId, BookingFlow flow, Bot bot) {
         Room room = roomRepository.findById(flow.roomId).orElse(null);
         if (room == null) {
@@ -189,8 +188,8 @@ public final class BookingFormService {
     /// Показывает детали бронирования перед подтверждением.
     ///
     /// @param chatId идентификатор Telegram-чата
-    /// @param flow состояние диалога
-    /// @param bot бот для отправки сообщения
+    /// @param flow   состояние диалога
+    /// @param bot    бот для отправки сообщения
     private void showBookingConfirmation(long chatId, BookingFlow flow, Bot bot) {
         Base base = baseRepository.findById(flow.baseId).orElse(null);
         Room room = roomRepository.findById(flow.roomId).orElse(null);
@@ -223,9 +222,9 @@ public final class BookingFormService {
 
     /// Отправляет текстовое сообщение с клавиатурой.
     ///
-    /// @param bot транспорт для отправки сообщения
-    /// @param chatId идентификатор Telegram-чата
-    /// @param text текст сообщения
+    /// @param bot      транспорт для отправки сообщения
+    /// @param chatId   идентификатор Telegram-чата
+    /// @param text     текст сообщения
     /// @param keyboard строки кнопок
     private void send(Bot bot, long chatId, String text, List<List<Button>> keyboard) {
         bot.sendMessage(new Message(text, null, keyboard), chatId);
