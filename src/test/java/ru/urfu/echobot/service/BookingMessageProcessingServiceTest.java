@@ -45,7 +45,7 @@ final class BookingMessageProcessingServiceTest {
     /// @param user клиент
     /// @param data данные кнопки
     private void press(long user, String data) {
-        service.processMessage(Message.builder().buttonData(data).build(), user, bot);
+        service.processMessage(new Message(null, data, List.of()), user, bot);
     }
 
     /// Отправляет сервису текст.
@@ -53,7 +53,7 @@ final class BookingMessageProcessingServiceTest {
     /// @param user клиент
     /// @param text текст сообщения
     private void type(long user, String text) {
-        service.processMessage(Message.builder().text(text).build(), user, bot);
+        service.processMessage(new Message(text, null, List.of()), user, bot);
     }
 
     /// Нажимает кнопки до шага «имя» для бронирования на 2 часа в указанный день и час.
@@ -225,5 +225,34 @@ final class BookingMessageProcessingServiceTest {
         press(CLIENT, "back");
 
         assertEquals(List.of("Забронировать", "Мои записи", "О базе"), lastButtons());
+    }
+
+    /// Проверяет, что при старте в 23:00 длительность ограничена одним часом до закрытия в 24:00.
+    @Test
+    void durationAfterTwentyThreeIsLimitedToOneHour() {
+        press(CLIENT, "menu:book");
+        press(CLIENT, "book:base:1");
+        press(CLIENT, "book:room:2");
+        press(CLIENT, "book:day:2026-10-24");
+        press(CLIENT, "book:time:2026-10-24:23");
+
+        assertEquals(List.of("1", "Назад"), lastButtons());
+    }
+
+    /// Проверяет, что возврат из ввода телефона сбрасывает ранее введённые контактные данные.
+    @Test
+    void goingBackInCustomerFormClearsPreviouslyEnteredValues() {
+        chooseSlot(CLIENT, 1, 2, "2026-10-24", 18);
+        type(CLIENT, "Старое имя");
+        type(CLIENT, "+7 999 111-22-33");
+        press(CLIENT, "back");
+        type(CLIENT, "Новое имя");
+        type(CLIENT, "+7 999 444-55-66");
+        press(CLIENT, "book:skip");
+
+        assertTrue(lastText().contains("Имя: Новое имя"));
+        assertTrue(lastText().contains("Телефон: +79994445566"));
+        assertFalse(lastText().contains("Старое имя"));
+        assertFalse(lastText().contains("+79991112233"));
     }
 }

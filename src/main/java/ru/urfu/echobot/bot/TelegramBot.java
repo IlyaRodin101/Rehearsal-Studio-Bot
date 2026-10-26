@@ -23,10 +23,15 @@ import ru.urfu.echobot.service.MessageProcessingService;
 
 /// Telegram-бот, который принимает текст и нажатия кнопок и отправляет сообщения с кнопками.
 public final class TelegramBot extends DefaultLongPollingUpdateConsumer implements Bot {
-    private static final Logger LOGGER = LoggerFactory.getLogger(TelegramBot.class);
+    /// Журнал для регистрации ошибок и событий Telegram-бота.
+    private final Logger logger = LoggerFactory.getLogger(TelegramBot.class);
+    /// Клиент для отправки запросов Telegram API.
     private final TelegramClient telegramClient;
+    /// Сервис бизнес-логики входящих сообщений.
     private final MessageProcessingService logic;
+    /// Токен Telegram-бота.
     private final String token;
+    /// Приложение длинного опроса Telegram.
     private final TelegramBotsLongPollingApplication application;
 
     /// Конструктор.
@@ -44,13 +49,17 @@ public final class TelegramBot extends DefaultLongPollingUpdateConsumer implemen
     public void start() {
         try {
             application.registerBot(token, this);
-            LOGGER.info("Telegram bot successfully started!");
+            logger.info("Telegram bot successfully started!");
             Thread.currentThread().join();
         } catch (Exception e) {
-            LOGGER.error("Bot didn't get registered and didn't run.", e);
+            logger.error("Bot didn't get registered and didn't run.", e);
         }
     }
 
+    /// Отправляет сообщение пользователю Telegram, если сообщение содержит текст.
+    ///
+    /// @param msg сообщение с текстом и клавиатурой
+    /// @param id идентификатор Telegram-чата получателя
     @Override
     public void sendMessage(@NotNull Message msg, long id) {
         try {
@@ -59,14 +68,17 @@ public final class TelegramBot extends DefaultLongPollingUpdateConsumer implemen
                 telegramClient.execute(createSendMessage(text, msg.keyboard(), id));
             }
         } catch (TelegramApiException e) {
-            LOGGER.error("Couldn't send message", e);
+            logger.error("Couldn't send message", e);
         }
     }
 
+    /// Получает обновление Telegram и передаёт его обработчику диалога.
+    ///
+    /// @param update входящее обновление Telegram
     @Override
     public void consume(Update update) {
         try {
-            LOGGER.debug("Consuming update: {}", update);
+            logger.debug("Consuming update: {}", update);
             if (update.hasCallbackQuery()) {
                 consumeButtonPress(update.getCallbackQuery());
             } else if (update.hasMessage()) {
@@ -74,7 +86,7 @@ public final class TelegramBot extends DefaultLongPollingUpdateConsumer implemen
                 logic.processMessage(convertTelegramMessage(update.getMessage()), chatId, this);
             }
         } catch (Exception e) {
-            LOGGER.error("Failed to process update: {}", update, e);
+            logger.error("Failed to process update: {}", update, e);
         }
     }
 
@@ -85,7 +97,7 @@ public final class TelegramBot extends DefaultLongPollingUpdateConsumer implemen
     private void consumeButtonPress(@NotNull CallbackQuery query) throws TelegramApiException {
         telegramClient.execute(AnswerCallbackQuery.builder().callbackQueryId(query.getId()).build());
         final long chatId = query.getMessage().getChatId();
-        final Message msg = Message.builder().buttonData(query.getData()).build();
+        final Message msg = new Message(null, query.getData(), List.of());
         logic.processMessage(msg, chatId, this);
     }
 
@@ -96,7 +108,9 @@ public final class TelegramBot extends DefaultLongPollingUpdateConsumer implemen
     /// @param chatId   id чата, куда надо отправить сообщение
     /// @return объект [SendMessage], который можно отправлять
     private SendMessage createSendMessage(@NotNull String text, @NotNull List<List<Button>> keyboard, long chatId) {
-        final SendMessage.SendMessageBuilder<?, ?> builder = SendMessage.builder().chatId(chatId).text(text);
+        final SendMessage.SendMessageBuilder<?, ?> builder = SendMessage.builder()
+                .chatId(chatId)
+                .text(text);
         if (!keyboard.isEmpty()) {
             builder.replyMarkup(createKeyboard(keyboard));
         }
@@ -125,6 +139,6 @@ public final class TelegramBot extends DefaultLongPollingUpdateConsumer implemen
     /// @return объект нашего универсального сообщения
     private Message convertTelegramMessage(org.telegram.telegrambots.meta.api.objects.message.Message message) {
         final String text = message.hasPhoto() ? message.getCaption() : message.getText();
-        return Message.builder().text(text).build();
+        return new Message(text, null, List.of());
     }
 }
