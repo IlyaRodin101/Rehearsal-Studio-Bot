@@ -20,7 +20,7 @@ public final class Main {
     /// Имя переменной окружения с путём к файлу SQLite.
     private static final String DATABASE_PATH = "DATABASE_PATH";
     /// Путь к файлу SQLite по умолчанию.
-    private static final String DEFAULT_DATABASE_PATH = "database.db";
+    private static final String DEFAULT_DATABASE_PATH = "rehearsal-studio-bot.db";
 
     /// Приватный конструктор, добавленный для того, чтобы явно сообщить,
     /// что не нужно создавать объекты этого класса.
