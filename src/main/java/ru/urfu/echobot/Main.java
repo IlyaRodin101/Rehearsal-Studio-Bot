@@ -29,7 +29,7 @@ final public class Main {
     /// Имя переменной окружения со списком Telegram ID владельцев.
     private static final String OWNER_IDS = "OWNER_IDS";
     /// Путь к файлу SQLite по умолчанию.
-    private static final String DEFAULT_DATABASE_PATH = "database.db";
+    private static final String DEFAULT_DATABASE_PATH = "bookings.db";
     /// Имя переменной окружения с расположением файла базы данных.
     private static final String DATABASE_PATH = "DATABASE_PATH";
     /// Имя файла с локальными настройками запуска.

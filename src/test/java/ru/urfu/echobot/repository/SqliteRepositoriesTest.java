@@ -36,7 +36,7 @@ final class SqliteRepositoriesTest {
 
     @BeforeEach
     void setUp() {
-        database = new SqliteDatabase(temporaryDirectory.resolve("database.db").toString());
+        database = new SqliteDatabase(temporaryDirectory.resolve("bookings.db").toString());
         bases = new SqliteBaseRepository(database);
         rooms = new SqliteRoomRepository(database);
         bookings = new SqliteBookingRepository(database);
@@ -51,7 +51,7 @@ final class SqliteRepositoriesTest {
         Room room = rooms.save(new Room(0, base.id(), "Зал 1", true));
         assertTrue(bookings.addIfFree(booking(room.id(), 201, START, 2)));
 
-        SqliteDatabase reopened = new SqliteDatabase(temporaryDirectory.resolve("database.db").toString());
+        SqliteDatabase reopened = new SqliteDatabase(temporaryDirectory.resolve("bookings.db").toString());
 
         assertEquals(base, new SqliteBaseRepository(reopened).findById(base.id()).orElseThrow());
         assertEquals(room, new SqliteRoomRepository(reopened).findById(room.id()).orElseThrow());
