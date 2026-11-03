@@ -122,7 +122,9 @@ final class SqliteBookingRepositoryTest {
         }
     }
 
-    /// Проверяет, что при одновременном бронировании одного слота SQLite сохраняет только одну заявку.
+    /// Проверяет, что при
+    ///
+    /// одновременном бронировании одного слота SQLite сохраняет только одну заявку.
     @Test
     void onlyOneOfTwoConcurrentSqliteBookingsSucceeds() throws Exception {
         Path databasePath = temporaryDirectory.resolve("concurrent.db");
