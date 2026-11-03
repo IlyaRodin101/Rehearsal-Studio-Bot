@@ -10,6 +10,10 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
+import java.util.Iterator;
+
 import org.jetbrains.annotations.NotNull;
 import ru.urfu.echobot.bot.Bot;
 import ru.urfu.echobot.repository.BaseRepository;
@@ -38,23 +42,6 @@ public final class BookingMessageProcessingService implements MessageProcessingS
     private static final String COMMAND_START = "/start";
     /// Индекс часа начала в частях callback-данных.
     private static final int START_HOUR_PART = 3;
-    /// строковые константы, чтобы не ругался checkstyle
-    private final String room = "room";
-    private final String months = "months";
-    private final String month = "month";
-    private final String week = "week";
-    private final String day = "day";
-    private final String time = "time";
-    private final String hours = "hours";
-    private final String skip = "skip";
-    private final String confirm = "confirm";
-    private final String cancel = "cancel";
-    private final String list = "list";
-    /// целочисленные константы, чтобы не ругался checkstyle
-    /// Минимальное количество частей callback с идентификатором
-    private final int callbackPartsWithId = 3;
-    /// Минимальное количество частей callback для выбора времени
-    private final int callbackPartsForTime = 4;
     /// Минимальное количество частей callback без дополнительного аргумента.
     private final int callbackPartsWithoutArgument = 2;
     /// Собирает кнопки и клавиатуры для сообщений.
@@ -89,6 +76,8 @@ public final class BookingMessageProcessingService implements MessageProcessingS
     private final Map<BookingFlow.Step, Consumer<TextContext>> textHandlers;
     /// Обработчики возврата для каждого шага диалога.
     private final Map<BookingFlow.Step, BiConsumer<Long, BookingFlow>> backHandlers;
+    /// Тайм-аут сессии
+    private static final long SESSION_TIMEOUT_MINUTES = 5;
 
     /// Создаёт обработчик сообщений с необходимыми репозиториями и правилами бронирования.
     ///
@@ -135,24 +124,40 @@ public final class BookingMessageProcessingService implements MessageProcessingS
 
         bookingActionHandlers = new HashMap<>();
         bookingActionHandlers.put(CALLBACK_BASE, this::selectBase);
+        /// строковые константы, чтобы не ругался checkstyle
+        String room = "room";
         bookingActionHandlers.put(room, this::selectRoom);
+        String months = "months";
         bookingActionHandlers.put(months, this::selectMonths);
+        String month = "month";
         bookingActionHandlers.put(month, this::selectMonth);
+        String week = "week";
         bookingActionHandlers.put(week, this::selectWeek);
+        String day = "day";
         bookingActionHandlers.put(day, this::selectDay);
+        String time = "time";
         bookingActionHandlers.put(time, this::selectTime);
+        String hours = "hours";
         bookingActionHandlers.put(hours, this::selectHours);
+        String skip = "skip";
         bookingActionHandlers.put(skip, this::handleSkipComment);
+        String confirm = "confirm";
         bookingActionHandlers.put(confirm, this::handleConfirmation);
+        String cancel = "cancel";
         bookingActionHandlers.put(cancel, context -> returnToMenu(context.chatId(), context.flow()));
 
         bookingCallbackPartCounts = new HashMap<>();
+        /// целочисленные константы, чтобы не ругался checkstyle
+        /// Минимальное количество частей callback с идентификатором
+        int callbackPartsWithId = 3;
         bookingCallbackPartCounts.put(CALLBACK_BASE, callbackPartsWithId);
         bookingCallbackPartCounts.put(room, callbackPartsWithId);
         bookingCallbackPartCounts.put(months, callbackPartsWithId);
         bookingCallbackPartCounts.put(month, callbackPartsWithId);
         bookingCallbackPartCounts.put(week, callbackPartsWithId);
         bookingCallbackPartCounts.put(day, callbackPartsWithId);
+        /// Минимальное количество частей callback для выбора времени
+        int callbackPartsForTime = 4;
         bookingCallbackPartCounts.put(time, callbackPartsForTime);
         bookingCallbackPartCounts.put(hours, callbackPartsWithId);
         bookingCallbackPartCounts.put(skip, callbackPartsWithoutArgument);
@@ -161,6 +166,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
 
         aboutActionHandlers = new HashMap<>();
         aboutActionHandlers.put(CALLBACK_BASE, this::showSelectedBaseInformation);
+        String list = "list";
         aboutActionHandlers.put(list, context -> informationService.showAboutBases(context.chatId(), transport));
 
         aboutCallbackPartCounts = new HashMap<>();
@@ -211,6 +217,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
     /// @param bot    бот для отправки ответов
     @Override
     public void processMessage(@NotNull Message msg, long chatId, @NotNull Bot bot) {
+        cleanupExpiredFlows();
         transport = bot;
         if (msg.buttonData() != null) {
             handleCallback(msg.buttonData(), chatId);
@@ -470,7 +477,9 @@ public final class BookingMessageProcessingService implements MessageProcessingS
     /// @param userId идентификатор пользователя
     /// @return состояние диалога пользователя
     private BookingFlow flow(long userId) {
-        return flows.computeIfAbsent(userId, id -> new BookingFlow());
+        BookingFlow flow = flows.computeIfAbsent(userId, id -> new BookingFlow());
+        flow.updateLastActivity();
+        return flow;
     }
 
     /// Отправляет текстовое сообщение с клавиатурой.
@@ -481,6 +490,22 @@ public final class BookingMessageProcessingService implements MessageProcessingS
     private void send(long chatId, String text, List<List<Button>> keyboard) {
         List<List<Button>> safeKeyboard = keyboard == null ? List.of() : keyboard;
         transport.sendMessage(new Message(text, null, safeKeyboard), chatId);
+    }
+
+    private void cleanupExpiredFlows() {
+        Iterator<Map.Entry<Long, BookingFlow>> iterator = flows.entrySet().iterator();
+        LocalDateTime currentTime = LocalDateTime.now();
+
+        while (iterator.hasNext()) {
+            Map.Entry<Long, BookingFlow> entry = iterator.next();
+            LocalDateTime lastActivityAt = entry.getValue().getLastActivityAt();
+            long inactiveMinutes = ChronoUnit.MINUTES.between(lastActivityAt, currentTime);
+
+            if (inactiveMinutes >= SESSION_TIMEOUT_MINUTES) {
+                iterator.remove();
+            }
+        }
+
     }
 
     /// Данные callback-команды, необходимые обработчику.
