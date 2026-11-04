@@ -141,7 +141,9 @@ public final class BookingFormService {
     public boolean confirmBooking(long userId, BookingFlow flow) {
         LocalDateTime start = flow.bookingDate.atTime(flow.startHour, 0);
         Base base = baseRepository.findById(flow.baseId).orElse(null);
-        return base != null && rules.canBook(base, start, flow.hours)
+        Room room = roomRepository.findById(flow.roomId).orElse(null);
+        return base != null && room != null && room.active() && room.baseId() == base.id()
+                && rules.canBook(base, start, flow.hours)
                 && bookingRepository.addIfFree(new Booking(flow.roomId, userId, start, flow.hours,
                 flow.name, flow.phone, flow.comment == null ? "" : flow.comment));
     }

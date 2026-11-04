@@ -18,4 +18,13 @@ public interface RoomRepository {
     /// @param roomId идентификатор зала
     /// @return зал или пустой результат, если такого нет
     Optional<Room> findById(long roomId);
+
+    /// Добавляет зал в базу.
+    Room save(Room room);
+
+    /// Обновляет свойства зала.
+    void update(Room room);
+
+    /// Удаляет зал для новых бронирований, сохраняя его историю.
+    void deactivate(long roomId);
 }

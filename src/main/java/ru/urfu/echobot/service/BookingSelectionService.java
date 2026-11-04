@@ -115,9 +115,17 @@ public final class BookingSelectionService {
         for (Room room : rooms) {
             keyboards.addButton(rows, keyboards.button(room.name(), "book:room:" + room.id()), 2);
         }
+
         rows.add(keyboards.row(keyboards.button(BACK, MENU_BOOK)));
         String text = rooms.isEmpty() ? "В этой базе пока нет доступных залов." : "Выберите зал:";
         send(bot, chatId, text, keyboards.markup(rows));
+    }
+
+    /// Validates that a room belongs to the selected base and is available for new bookings.
+    public boolean isAvailableRoom(long baseId, long roomId) {
+        return roomRepository.findById(roomId)
+                .filter(room -> room.baseId() == baseId && room.active())
+                .isPresent();
     }
 
     /// Показывает месяцы, в которых есть доступное время для бронирования.
