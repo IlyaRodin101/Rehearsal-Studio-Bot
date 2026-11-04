@@ -100,10 +100,8 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         this.selectionService = new BookingSelectionService(baseRepository, roomRepository, bookingRepository, rules,
                 availabilityService, keyboards, formatter);
         this.informationService = new BookingInformationService(baseRepository, roomRepository, bookingRepository,
-                rules, formatter, keyboards);
-        this.formService = new BookingFormService(baseRepository, roomRepository, bookingRepository, rules,
-                new FormUtilities(new PhoneNormalizer(), formatter),
-                keyboards, selectionService);
+                rules, formatter);
+        this.formService = new BookingFormService(baseRepository, roomRepository, bookingRepository, rules, selectionService);
         this.ownerManagementService = new OwnerManagementService(baseRepository, roomRepository, ownerIds);
         callbackHandlers = new HashMap<>();
         callbackHandlers.put(CALLBACK_BACK, context -> back(context.chatId(), context.flow()));

@@ -30,7 +30,7 @@ final class BookingRulesTest {
         base = new InitialData(clock).bases().get(0);
     }
 
-    /// Given: будний день с запасом по времени. When: проверяем бронь. Then: можно.
+    /// Given: суббота, база работает. When: проверяем бронь. Then: можно.
     @Test
     void bookingInsideWorkingHoursIsAllowed() {
         assertTrue(rules.canBook(base, LocalDateTime.of(2026, 10, 24, 18, 0), 2));
@@ -66,5 +66,21 @@ final class BookingRulesTest {
     @Test
     void todayIsTakenFromClockInBaseTimezone() {
         assertEquals(LocalDate.of(2026, 10, 20), rules.today(base));
+    }
+
+    /**
+     * Given: по UTC 19 октября 22:30, а в часовом поясе базы уже 20 октября.
+     * When: запрашиваем текущую дату базы.
+     * Then: возвращается 20 октября 2026 года.
+     */
+    @Test
+    void todayUsesBaseTimezoneWhenUtcDateDiffers() {
+        Clock boundaryClock = Clock.fixed(
+                Instant.parse("2026-10-19T22:30:00Z"),
+                ZoneOffset.UTC
+        );
+        BookingRules timezoneRules = new BookingRules(boundaryClock);
+
+        assertEquals(LocalDate.of(2026, 10, 20), timezoneRules.today(base));
     }
 }

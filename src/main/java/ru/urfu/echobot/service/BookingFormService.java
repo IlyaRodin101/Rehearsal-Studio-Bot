@@ -29,11 +29,11 @@ public final class BookingFormService {
     /// Правила проверки бронирования.
     private final BookingRules rules;
     /// Нормализатор российских номеров телефонов.
-    private final PhoneNormalizer phoneNormalizer;
+    private final PhoneNormalizer phoneNormalizer = new PhoneNormalizer();
     /// Форматер дат и времени.
-    private final RussianDateFormatter formatter;
+    private final RussianDateFormatter formatter = new RussianDateFormatter();
     /// Фабрика клавиатур.
-    private final BookingKeyboardFactory keyboards;
+    private final BookingKeyboardFactory keyboards = new BookingKeyboardFactory();
     /// Сервис выбора базы, зала, даты и времени.
     private final BookingSelectionService selectionService;
 
@@ -43,20 +43,13 @@ public final class BookingFormService {
     /// @param roomRepository    хранилище залов
     /// @param bookingRepository хранилище броней
     /// @param rules             правила бронирования
-    /// @param formUtilities     нормализатор телефонных номеров и форматер дат и времени в едином объекте
-    /// @param keyboards         фабрика клавиатур
     /// @param selectionService  сервис выбора слота
     public BookingFormService(BaseRepository baseRepository, RoomRepository roomRepository,
-                              BookingRepository bookingRepository, BookingRules rules,
-                              FormUtilities formUtilities,
-                              BookingKeyboardFactory keyboards, BookingSelectionService selectionService) {
+                              BookingRepository bookingRepository, BookingRules rules, BookingSelectionService selectionService) {
         this.baseRepository = baseRepository;
         this.roomRepository = roomRepository;
         this.bookingRepository = bookingRepository;
         this.rules = rules;
-        this.phoneNormalizer = formUtilities.phoneNormalizer;
-        this.formatter = formUtilities.formatter;
-        this.keyboards = keyboards;
         this.selectionService = selectionService;
     }
 
