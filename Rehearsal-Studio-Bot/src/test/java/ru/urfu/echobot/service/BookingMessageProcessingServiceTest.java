@@ -9,35 +9,40 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Set;
+import java.nio.file.Path;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import ru.urfu.echobot.TestStudioData;
 import ru.urfu.echobot.bot.DummyBot;
-import ru.urfu.echobot.repository.InMemoryBaseRepository;
-import ru.urfu.echobot.repository.InMemoryBookingRepository;
-import ru.urfu.echobot.repository.InMemoryRoomRepository;
-import ru.urfu.echobot.repository.InitialData;
 
 /// Тесты диалогов бронирования без Telegram. Время зафиксировано: вторник, 20 октября 2026, 10:00 по Москве.
 /// В начальных данных заняты: «Центр», Зал 1, 21 октября 18:00-20:00 и «Север», Студия, 22 октября 13:00-16:00.
 final class BookingMessageProcessingServiceTest {
+    /// Chat ID used to verify that group replies do not become conversation identifiers.
+    private final long groupChat = -1000001L;
     /// Первый клиент.
-    private static final long CLIENT = 42L;
+    private final long client = 42L;
     /// Второй клиент.
-    private static final long OTHER_CLIENT = 43L;
+    private final long otherClient = 43L;
+    /// Temporary directory that isolates the SQLite database for each test.
+    @TempDir
+    private Path temporaryDirectory;
 
     /// Бот-заглушка, собирающая ответы.
     private DummyBot bot;
     /// Проверяемый сервис.
     private BookingMessageProcessingService service;
+    /// SQLite repositories and records used by the current test.
+    private TestStudioData data;
 
     /// Создаёт сервис с начальными данными и фиксированным временем перед каждым тестом.
     @BeforeEach
     void setUp() {
         Clock clock = Clock.fixed(Instant.parse("2026-10-20T07:00:00Z"), ZoneOffset.UTC);
-        InitialData data = new InitialData(clock);
-        service = new BookingMessageProcessingService(new InMemoryBaseRepository(data.bases()),
-                new InMemoryRoomRepository(data.rooms()), new InMemoryBookingRepository(data.bookings()),
-                new BookingRules(clock));
+        data = new TestStudioData(temporaryDirectory, clock);
+        service = new BookingMessageProcessingService(data.baseRepository(), data.roomRepository(),
+                data.bookingRepository(), new BookingRules(clock));
         bot = new DummyBot();
     }
 
@@ -90,7 +95,7 @@ final class BookingMessageProcessingServiceTest {
     /// Given: любой клиент. When: отправляет /start. Then: в меню три кнопки.
     @Test
     void startShowsMainMenuButtons() {
-        type(CLIENT, "/start");
+        type(client, "/start");
 
         assertEquals(List.of("Забронировать", "Мои записи", "О базе"), lastButtons());
     }
@@ -99,34 +104,57 @@ final class BookingMessageProcessingServiceTest {
     @Test
     void ownerSeesBaseManagementAndClientActions() {
         Clock clock = Clock.fixed(Instant.parse("2026-10-20T07:00:00Z"), ZoneOffset.UTC);
-        InitialData data = new InitialData(clock);
         BookingMessageProcessingService ownerService = new BookingMessageProcessingService(
-                new InMemoryBaseRepository(data.bases()),
-                new InMemoryRoomRepository(data.rooms()),
-                new InMemoryBookingRepository(data.bookings()),
-                new BookingRules(clock), Set.of(CLIENT));
+                data.baseRepository(), data.roomRepository(), data.bookingRepository(),
+                new BookingRules(clock), Set.of(client));
 
-        ownerService.processMessage(new Message("/start", null, List.of()), CLIENT, bot);
+        ownerService.processMessage(new Message("/start", null, List.of()), client, bot);
 
         assertTrue(lastButtons().containsAll(List.of("Забронировать", "Мои записи", "О базе", "Базы")));
+    }
+
+    /// Verifies that a group message is replied to in its chat while booking state uses the sender ID.
+    @Test
+    void groupBookingUsesSenderIdForStateAndChatIdForReplies() {
+        processInGroup(new Message(null, "menu:book", List.of()));
+        processInGroup(new Message(null, "book:base:1", List.of()));
+        processInGroup(new Message(null, "book:room:1", List.of()));
+        processInGroup(new Message(null, "book:day:2026-10-24", List.of()));
+        processInGroup(new Message(null, "book:time:2026-10-24:18", List.of()));
+        processInGroup(new Message(null, "book:hours:2", List.of()));
+        processInGroup(new Message("Групповой клиент", null, List.of()));
+        processInGroup(new Message("+7 999 123-45-67", null, List.of()));
+        processInGroup(new Message(null, "book:skip", List.of()));
+        processInGroup(new Message(null, "book:confirm", List.of()));
+
+        assertEquals(groupChat, bot.lastChatId());
+        assertEquals(1, data.bookingRepository().findByUser(client).size());
+        assertTrue(data.bookingRepository().findByUser(groupChat).isEmpty());
+    }
+
+    /// Sends one test update to the group using distinct chat and sender IDs.
+    ///
+    /// @param message Telegram message to process
+    private void processInGroup(Message message) {
+        service.processMessage(message, groupChat, client, bot);
     }
 
     /// Given: клиент проходит весь диалог. When: подтверждает бронь. Then: запись создана и видна в «Мои записи».
     @Test
     void clientBooksRoomAndSeesItInMyBookings() {
-        chooseSlot(CLIENT, 1, 1, "2026-10-24", 18);
-        type(CLIENT, "Анна");
-        type(CLIENT, "+7 999 123-45-67");
-        press(CLIENT, "book:skip");
+        chooseSlot(client, 1, 1, "2026-10-24", 18);
+        type(client, "Анна");
+        type(client, "+7 999 123-45-67");
+        press(client, "book:skip");
 
         assertTrue(lastText().contains("База «Центр», Зал 1"));
         assertTrue(lastText().contains("18:00-20:00"));
         assertTrue(lastText().contains("Телефон: +79991234567"));
 
-        press(CLIENT, "book:confirm");
+        press(client, "book:confirm");
         assertTrue(bot.messages().stream().anyMatch(m -> "Готово, запись создана.".equals(m.text())));
 
-        press(CLIENT, "menu:mine");
+        press(client, "menu:mine");
         assertTrue(bot.messages().stream().anyMatch(m -> m.text() != null
                 && m.text().contains("Центр, Зал 1") && m.text().contains("18:00-20:00")));
     }
@@ -134,7 +162,7 @@ final class BookingMessageProcessingServiceTest {
     /// Given: у клиента нет записей. When: открывает «Мои записи». Then: бот сообщает, что записей нет.
     @Test
     void myBookingsIsEmptyForNewClient() {
-        press(CLIENT, "menu:mine");
+        press(client, "menu:mine");
 
         assertTrue(bot.messages().stream().anyMatch(m -> "У вас пока нет будущих записей.".equals(m.text())));
     }
@@ -142,9 +170,9 @@ final class BookingMessageProcessingServiceTest {
     /// Given: клиент вводит неверный телефон. When: отправляет «12345». Then: бот просит ввести номер снова.
     @Test
     void invalidPhoneIsRejected() {
-        chooseSlot(CLIENT, 1, 1, "2026-10-24", 18);
-        type(CLIENT, "Анна");
-        type(CLIENT, "12345");
+        chooseSlot(client, 1, 1, "2026-10-24", 18);
+        type(client, "Анна");
+        type(client, "12345");
 
         assertTrue(lastText().startsWith("Не удалось распознать номер"));
     }
@@ -153,15 +181,15 @@ final class BookingMessageProcessingServiceTest {
     /// а настоящий комментарий принимается.
     @Test
     void requiredCommentCannotBeSkipped() {
-        chooseSlot(CLIENT, 2, 4, "2026-10-24", 18);
-        type(CLIENT, "Игорь");
-        type(CLIENT, "8 912 000-11-22");
+        chooseSlot(client, 2, 4, "2026-10-24", 18);
+        type(client, "Игорь");
+        type(client, "8 912 000-11-22");
         assertFalse(lastButtons().contains("Пропустить"));
 
-        type(CLIENT, "-");
+        type(client, "-");
         assertTrue(lastText().startsWith("Комментарий не может быть пустым"));
 
-        type(CLIENT, "Запись барабанов и баса");
+        type(client, "Запись барабанов и баса");
         assertTrue(lastText().contains("Комментарий: Запись барабанов и баса"));
     }
 
@@ -169,17 +197,17 @@ final class BookingMessageProcessingServiceTest {
     /// Then: он получает сообщение, что время недоступно.
     @Test
     void secondClientGetsMessageWhenSlotIsTaken() {
-        chooseSlot(CLIENT, 1, 1, "2026-10-24", 18);
-        type(CLIENT, "Анна");
-        type(CLIENT, "+7 999 123-45-67");
-        press(CLIENT, "book:skip");
-        chooseSlot(OTHER_CLIENT, 1, 1, "2026-10-24", 18);
-        type(OTHER_CLIENT, "Игорь");
-        type(OTHER_CLIENT, "+7 912 000-11-22");
-        press(OTHER_CLIENT, "book:skip");
+        chooseSlot(client, 1, 1, "2026-10-24", 18);
+        type(client, "Анна");
+        type(client, "+7 999 123-45-67");
+        press(client, "book:skip");
+        chooseSlot(otherClient, 1, 1, "2026-10-24", 18);
+        type(otherClient, "Игорь");
+        type(otherClient, "+7 912 000-11-22");
+        press(otherClient, "book:skip");
 
-        press(CLIENT, "book:confirm");
-        press(OTHER_CLIENT, "book:confirm");
+        press(client, "book:confirm");
+        press(otherClient, "book:confirm");
 
         assertTrue(lastText().startsWith("Это время больше недоступно"));
     }
@@ -188,10 +216,10 @@ final class BookingMessageProcessingServiceTest {
     /// Then: 18:00 и 19:00 не предлагаются.
     @Test
     void occupiedHoursAreNotOffered() {
-        press(CLIENT, "menu:book");
-        press(CLIENT, "book:base:1");
-        press(CLIENT, "book:room:1");
-        press(CLIENT, "book:day:2026-10-21");
+        press(client, "menu:book");
+        press(client, "book:base:1");
+        press(client, "book:room:1");
+        press(client, "book:day:2026-10-21");
 
         assertTrue(lastButtons().contains("17:00"));
         assertFalse(lastButtons().contains("18:00"));
@@ -203,10 +231,10 @@ final class BookingMessageProcessingServiceTest {
     /// Then: раньше 12:00 времени нет.
     @Test
     void timesCloserThanLeadTimeAreHidden() {
-        press(CLIENT, "menu:book");
-        press(CLIENT, "book:base:1");
-        press(CLIENT, "book:room:1");
-        press(CLIENT, "book:day:2026-10-20");
+        press(client, "menu:book");
+        press(client, "book:base:1");
+        press(client, "book:room:1");
+        press(client, "book:day:2026-10-20");
 
         assertFalse(lastButtons().contains("9:00"));
         assertFalse(lastButtons().contains("11:00"));
@@ -216,10 +244,10 @@ final class BookingMessageProcessingServiceTest {
     /// Given: в воскресенье база закрыта. When: клиент выбирает воскресенье. Then: свободного времени нет.
     @Test
     void closedDayHasNoTimes() {
-        press(CLIENT, "menu:book");
-        press(CLIENT, "book:base:1");
-        press(CLIENT, "book:room:1");
-        press(CLIENT, "book:day:2026-10-25");
+        press(client, "menu:book");
+        press(client, "book:base:1");
+        press(client, "book:room:1");
+        press(client, "book:day:2026-10-25");
 
         assertEquals("На этот день свободного времени нет.", lastText());
     }
@@ -227,8 +255,8 @@ final class BookingMessageProcessingServiceTest {
     /// Given: клиент открывает информацию о базе. When: выбирает «Север». Then: видит адрес, график и оборудование.
     @Test
     void aboutBaseShowsAddressScheduleAndEquipment() {
-        press(CLIENT, "menu:about");
-        press(CLIENT, "about:base:2");
+        press(client, "menu:about");
+        press(client, "about:base:2");
 
         assertTrue(lastText().contains("ул. Ленина, 15"));
         assertTrue(lastText().contains("Вс: выходной"));
@@ -238,8 +266,8 @@ final class BookingMessageProcessingServiceTest {
     /// Given: клиент на первом шаге бронирования. When: нажимает «Назад». Then: попадает в главное меню.
     @Test
     void backFromFirstStepReturnsToMainMenu() {
-        press(CLIENT, "menu:book");
-        press(CLIENT, "back");
+        press(client, "menu:book");
+        press(client, "back");
 
         assertEquals(List.of("Забронировать", "Мои записи", "О базе"), lastButtons());
     }
@@ -247,11 +275,11 @@ final class BookingMessageProcessingServiceTest {
     /// Проверяет, что при старте в 23:00 длительность ограничена одним часом до закрытия в 24:00.
     @Test
     void durationAfterTwentyThreeIsLimitedToOneHour() {
-        press(CLIENT, "menu:book");
-        press(CLIENT, "book:base:1");
-        press(CLIENT, "book:room:2");
-        press(CLIENT, "book:day:2026-10-24");
-        press(CLIENT, "book:time:2026-10-24:23");
+        press(client, "menu:book");
+        press(client, "book:base:1");
+        press(client, "book:room:2");
+        press(client, "book:day:2026-10-24");
+        press(client, "book:time:2026-10-24:23");
 
         assertEquals(List.of("1", "Назад"), lastButtons());
     }
@@ -259,13 +287,13 @@ final class BookingMessageProcessingServiceTest {
     /// Проверяет, что возврат из ввода телефона сбрасывает ранее введённые контактные данные.
     @Test
     void goingBackInCustomerFormClearsPreviouslyEnteredValues() {
-        chooseSlot(CLIENT, 1, 2, "2026-10-24", 18);
-        type(CLIENT, "Старое имя");
-        type(CLIENT, "+7 999 111-22-33");
-        press(CLIENT, "back");
-        type(CLIENT, "Новое имя");
-        type(CLIENT, "+7 999 444-55-66");
-        press(CLIENT, "book:skip");
+        chooseSlot(client, 1, 2, "2026-10-24", 18);
+        type(client, "Старое имя");
+        type(client, "+7 999 111-22-33");
+        press(client, "back");
+        type(client, "Новое имя");
+        type(client, "+7 999 444-55-66");
+        press(client, "book:skip");
 
         assertTrue(lastText().contains("Имя: Новое имя"));
         assertTrue(lastText().contains("Телефон: +79994445566"));

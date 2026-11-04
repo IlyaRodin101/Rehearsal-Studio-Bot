@@ -23,7 +23,7 @@ import ru.urfu.echobot.service.MessageProcessingService;
 /// Основной класс для запуска приложения.
 final public class Main {
     /// Логгер приложения.
-    private static final Logger LOGGER = LoggerFactory.getLogger(Main.class);
+    private final Logger logger = LoggerFactory.getLogger(Main.class);
     /// Имя переменной окружения с токеном бота.
     private static final String TELEGRAM_TOKEN = "TELEGRAM_TOKEN";
     /// Имя переменной окружения со списком Telegram ID владельцев.
@@ -41,12 +41,20 @@ final public class Main {
     }
 
     /// Точка входа в программу.
-    static void main() {
+    /// JVM entry point; the static modifier is required by the Java launcher.
+    ///
+    /// @param args command-line arguments
+    public static void main(String[] args) {
+        new Main().run();
+    }
+
+    /// Loads configuration, creates SQLite repositories, and starts the Telegram bot.
+    private void run() {
         try {
             final Map<String, String> configuration = loadConfiguration();
             final String tgBotToken = configuration.get(TELEGRAM_TOKEN);
             if (tgBotToken == null || tgBotToken.isBlank()) {
-                LOGGER.error("Set {} in .env or as an environment variable", TELEGRAM_TOKEN);
+                logger.error("Set {} in .env or as an environment variable", TELEGRAM_TOKEN);
                 return;
             }
             final Clock clock = Clock.systemUTC();
@@ -63,11 +71,15 @@ final public class Main {
                 bot.start();
             }
         } catch (Exception exception) {
-            LOGGER.error("Couldn't start Telegram bot", exception);
+            logger.error("Couldn't start Telegram bot", exception);
         }
     }
 
-    private static Map<String, String> loadConfiguration() throws IOException {
+    /// Reads environment variables and fills missing values from the local .env file.
+    ///
+    /// @return merged configuration with environment variables taking precedence
+    /// @throws IOException if the .env file cannot be read
+    private Map<String, String> loadConfiguration() throws IOException {
         Map<String, String> configuration = new HashMap<>(System.getenv());
         Path envFile = Path.of(ENV_FILE);
         if (Files.isRegularFile(envFile)) {
@@ -90,14 +102,22 @@ final public class Main {
         return Map.copyOf(configuration);
     }
 
-    private static String unquote(String value) {
+    /// Removes matching double quotes around a configuration value.
+    ///
+    /// @param value raw value
+    /// @return unquoted value, or the original value
+    private String unquote(String value) {
         if (value.length() >= 2 && value.startsWith("\"") && value.endsWith("\"")) {
             return value.substring(1, value.length() - 1);
         }
         return value;
     }
 
-    private static Set<Long> parseOwnerIds(String value) {
+    /// Parses a comma-separated list of Telegram owner IDs.
+    ///
+    /// @param value configured owner IDs
+    /// @return immutable set of owner IDs
+    private Set<Long> parseOwnerIds(String value) {
         if (value == null || value.isBlank()) {
             return Set.of();
         }

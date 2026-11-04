@@ -9,10 +9,13 @@ import ru.urfu.echobot.service.Message;
 public final class DummyBot implements Bot {
     /// Все сообщения, отправленные ботом, в порядке отправки.
     private final List<Message> sentMessages = new ArrayList<>();
+    /// Идентификаторы чатов, в которые отправлялись сообщения.
+    private final List<Long> sentChatIds = new ArrayList<>();
 
     @Override
     public void sendMessage(@NotNull Message msg, long id) {
         sentMessages.add(msg);
+        sentChatIds.add(id);
     }
 
     /// Возвращает последнее отправленное сообщение.
@@ -34,5 +37,12 @@ public final class DummyBot implements Bot {
     /// @return количество сообщений
     public int sentCount() {
         return sentMessages.size();
+    }
+
+    /// Returns the chat ID used for the most recently sent message.
+    ///
+    /// @return destination chat ID
+    public long lastChatId() {
+        return sentChatIds.get(sentChatIds.size() - 1);
     }
 }

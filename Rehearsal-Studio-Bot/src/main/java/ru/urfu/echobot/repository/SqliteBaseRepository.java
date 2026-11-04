@@ -13,6 +13,7 @@ import java.util.Map;
 import java.util.Optional;
 import ru.urfu.echobot.model.Base;
 import ru.urfu.echobot.model.OpeningHours;
+import ru.urfu.echobot.model.Room;
 
 /// SQLite repository for bases and their weekly schedules.
 public final class SqliteBaseRepository implements BaseRepository {
@@ -23,6 +24,9 @@ public final class SqliteBaseRepository implements BaseRepository {
     private static final int LEAD_HOURS_PARAMETER = 5;
     private static final int EQUIPMENT_PARAMETER = 6;
     private static final int BASE_ID_PARAMETER = 7;
+    private static final int ROOM_BASE_ID_PARAMETER = 1;
+    private static final int ROOM_NAME_PARAMETER = 2;
+    private static final int ROOM_COMMENT_REQUIRED_PARAMETER = 3;
     private static final int DAY_PARAMETER = 2;
     private static final int OPEN_HOUR_PARAMETER = 3;
     private static final int CLOSE_HOUR_PARAMETER = 4;
@@ -63,6 +67,26 @@ public final class SqliteBaseRepository implements BaseRepository {
             }
         } catch (SQLException exception) {
             throw new IllegalStateException("Could not save base", exception);
+        }
+    }
+
+    @Override
+    public Base save(Base base, List<Room> rooms) {
+        try (Connection connection = database.open()) {
+            connection.setAutoCommit(false);
+            try {
+                long id = insertBase(connection, base);
+                saveSchedule(connection, id, base.openingHours());
+                saveRooms(connection, id, rooms);
+                connection.commit();
+                return new Base(id, base.ownerId(), base.name(), base.address(), base.timezone(),
+                        base.bookingLeadHours(), base.equipment(), base.openingHours());
+            } catch (SQLException | RuntimeException exception) {
+                connection.rollback();
+                throw exception;
+            }
+        } catch (SQLException exception) {
+            throw new IllegalStateException("Could not save base and initial rooms", exception);
         }
     }
 
@@ -142,6 +166,19 @@ public final class SqliteBaseRepository implements BaseRepository {
                 statement.setInt(DAY_PARAMETER, entry.getKey().getValue());
                 statement.setInt(OPEN_HOUR_PARAMETER, entry.getValue().openHour());
                 statement.setInt(CLOSE_HOUR_PARAMETER, entry.getValue().closeHour());
+                statement.addBatch();
+            }
+            statement.executeBatch();
+        }
+    }
+
+    private void saveRooms(Connection connection, long baseId, List<Room> rooms) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement(
+                "INSERT INTO rooms(base_id,name,comment_required,active) VALUES(?,?,?,1)")) {
+            for (Room room : rooms) {
+                statement.setLong(ROOM_BASE_ID_PARAMETER, baseId);
+                statement.setString(ROOM_NAME_PARAMETER, room.name());
+                statement.setInt(ROOM_COMMENT_REQUIRED_PARAMETER, room.commentRequired() ? 1 : 0);
                 statement.addBatch();
             }
             statement.executeBatch();

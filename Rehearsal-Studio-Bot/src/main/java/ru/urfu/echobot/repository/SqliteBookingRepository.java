@@ -97,7 +97,7 @@ public final class SqliteBookingRepository implements BookingRepository {
         }
     }
 
-    private static final class StatementControl implements AutoCloseable {
+    private final class StatementControl implements AutoCloseable {
         private final Connection connection;
         private boolean active;
 

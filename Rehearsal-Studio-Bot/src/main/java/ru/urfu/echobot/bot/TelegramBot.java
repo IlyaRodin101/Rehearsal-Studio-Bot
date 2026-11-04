@@ -82,8 +82,13 @@ public final class TelegramBot extends DefaultLongPollingUpdateConsumer implemen
             if (update.hasCallbackQuery()) {
                 consumeButtonPress(update.getCallbackQuery());
             } else if (update.hasMessage()) {
-                final long chatId = update.getMessage().getChatId();
-                logic.processMessage(convertTelegramMessage(update.getMessage()), chatId, this);
+                final var message = update.getMessage();
+                if (message.getFrom() == null) {
+                    logger.warn("Ignoring Telegram message without a sender ID: {}", message.getMessageId());
+                    return;
+                }
+                logic.processMessage(convertTelegramMessage(message), message.getChatId(),
+                        message.getFrom().getId(), this);
             }
         } catch (Exception e) {
             logger.error("Failed to process update: {}", update, e);
@@ -97,8 +102,9 @@ public final class TelegramBot extends DefaultLongPollingUpdateConsumer implemen
     private void consumeButtonPress(@NotNull CallbackQuery query) throws TelegramApiException {
         telegramClient.execute(AnswerCallbackQuery.builder().callbackQueryId(query.getId()).build());
         final long chatId = query.getMessage().getChatId();
+        final long userId = query.getFrom().getId();
         final Message msg = new Message(null, query.getData(), List.of());
-        logic.processMessage(msg, chatId, this);
+        logic.processMessage(msg, chatId, userId, this);
     }
 
     /// Превращает текст и кнопки в [SendMessage].
