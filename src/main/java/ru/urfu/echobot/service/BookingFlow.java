@@ -11,7 +11,8 @@ final class BookingFlow {
         MENU, BOOK_BASES, BOOK_ROOMS, BOOK_MONTH, BOOK_WEEK, BOOK_DAY, BOOK_TIME, BOOK_DURATION,
         BOOK_NAME, BOOK_PHONE, BOOK_COMMENT, BOOK_CONFIRM
     }
-    ///время последней активности пользователя
+
+    /// время последней активности пользователя
     private LocalDateTime lastActivityAt;
     /// Текущий шаг диалога.
     Step step = Step.MENU;
@@ -42,12 +43,16 @@ final class BookingFlow {
     BookingFlow() {
         lastActivityAt = LocalDateTime.now();
     }
+
     /// Обновляет время последней активности пользователя
-    void updateLastActivity(){
+    void updateLastActivity() {
+
         lastActivityAt = LocalDateTime.now();
     }
+
     /// Геттер последней активности пользователя
-    LocalDateTime getLastActivityAt(){
+    LocalDateTime getLastActivityAt() {
+
         return lastActivityAt;
     }
 

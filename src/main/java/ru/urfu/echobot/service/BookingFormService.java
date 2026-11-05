@@ -45,7 +45,8 @@ public final class BookingFormService {
     /// @param rules             правила бронирования
     /// @param selectionService  сервис выбора слота
     public BookingFormService(BaseRepository baseRepository, RoomRepository roomRepository,
-                              BookingRepository bookingRepository, BookingRules rules, BookingSelectionService selectionService) {
+                              BookingRepository bookingRepository,
+                              BookingRules rules, BookingSelectionService selectionService) {
         this.baseRepository = baseRepository;
         this.roomRepository = roomRepository;
         this.bookingRepository = bookingRepository;
