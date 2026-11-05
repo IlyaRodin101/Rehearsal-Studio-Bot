@@ -134,7 +134,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         menuActionHandlers.put(CALLBACK_ABOUT,
                 context -> informationService.showAboutBases(context.chatId(), context.bot()));
         menuActionHandlers.put("bases", context ->
-                ownerManagementService.showBaseList(context.userId(), context.bot()));
+                ownerManagementService.showBaseList(context.chatId(), context.userId(), context.bot()));
         menuActionHandlers.put("home", context -> returnToMenu(context.chatId(), context.userId(),
                 context.flow(), context.bot()));
 

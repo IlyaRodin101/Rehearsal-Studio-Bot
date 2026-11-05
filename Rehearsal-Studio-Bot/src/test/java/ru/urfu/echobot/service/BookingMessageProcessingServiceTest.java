@@ -108,9 +108,13 @@ final class BookingMessageProcessingServiceTest {
                 data.baseRepository(), data.roomRepository(), data.bookingRepository(),
                 new BookingRules(clock), Set.of(client));
 
-        ownerService.processMessage(new Message("/start", null, List.of()), client, bot);
+        ownerService.processMessage(new Message("/start", null, List.of()), groupChat, client, bot);
 
         assertTrue(lastButtons().containsAll(List.of("Забронировать", "Мои записи", "О базе", "Базы")));
+        ownerService.processMessage(new Message(null, "menu:bases", List.of()), groupChat, client, bot);
+
+        assertEquals(groupChat, bot.lastChatId());
+        assertEquals("У вас пока нет баз:", lastText());
     }
 
     /// Verifies that a group message is replied to in its chat while booking state uses the sender ID.

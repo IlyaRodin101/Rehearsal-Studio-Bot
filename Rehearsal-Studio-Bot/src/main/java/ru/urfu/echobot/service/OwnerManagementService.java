@@ -89,10 +89,21 @@ public final class OwnerManagementService {
     /// @param userId owner sender ID
     /// @param bot bot used to display the list
     public void showBaseList(long userId, Bot bot) {
-        if (!requireOwner(userId, bot)) {
+        showBaseList(userId, userId, bot);
+    }
+
+    /// Displays an owner's bases and sends the response to the originating chat.
+    ///
+    /// @param chatId chat receiving the response
+    /// @param userId Telegram sender ID used for authorization and base lookup
+    /// @param bot bot used to display the list
+    public void showBaseList(long chatId, long userId, Bot bot) {
+        if (!isOwner(userId)) {
+            bot.sendMessage(new Message("Действие недоступно.", null, List.of()), chatId);
             return;
         }
         State state = state(userId);
+        state.chatId = chatId;
         state.reset();
         List<List<Button>> rows = new ArrayList<>();
         List<Base> bases = baseRepository.findByOwnerId(userId);
@@ -101,7 +112,7 @@ public final class OwnerManagementService {
         }
         rows.add(keyboards.row(button("Добавить базу", "owner:add")));
         rows.add(keyboards.row(button("Назад", "menu:home")));
-        send(bot, userId, bases.isEmpty() ? "У вас пока нет баз:" : "Ваши базы:", rows);
+        sendToChat(bot, chatId, bases.isEmpty() ? "У вас пока нет баз:" : "Ваши базы:", rows);
     }
 
     /// Handles an owner callback for a private chat.
@@ -817,6 +828,16 @@ public final class OwnerManagementService {
         State state = states.get(chatId);
         long replyChatId = state == null ? chatId : state.chatId;
         bot.sendMessage(new Message(text, null, rows), replyChatId);
+    }
+
+    /// Sends a message to an explicit Telegram chat without resolving it from conversation state.
+    ///
+    /// @param bot bot used to send the message
+    /// @param chatId destination Telegram chat ID
+    /// @param text message text
+    /// @param rows keyboard rows
+    private void sendToChat(Bot bot, long chatId, String text, List<List<Button>> rows) {
+        bot.sendMessage(new Message(text, null, rows), chatId);
     }
 
     /// Steps in the owner configuration wizard.
