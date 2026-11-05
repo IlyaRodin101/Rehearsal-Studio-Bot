@@ -27,6 +27,8 @@ target/
 secrets/
 *.env
 # Local SQLite database
-database.db
+bookings.db
 database.db-shm
 database.db-wal
+
+command.txt

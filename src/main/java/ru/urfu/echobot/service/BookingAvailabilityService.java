@@ -69,7 +69,7 @@ public final class BookingAvailabilityService {
     /// @return true, если в этот день можно начать бронирование
     public boolean dateHasAvailability(Base base, long roomId, LocalDate date) {
         Room room = roomRepository.findById(roomId).orElse(null);
-        return room != null && !availableStarts(base, room, date).isEmpty();
+        return room != null && room.active() && !availableStarts(base, room, date).isEmpty();
     }
 
     /// Возвращает свободные часы начала бронирования в заданном зале и дне.
@@ -80,7 +80,7 @@ public final class BookingAvailabilityService {
     /// @return список доступных часов начала
     public List<Integer> availableStarts(Base base, Room room, LocalDate date) {
         OpeningHours hours = base.hoursOn(date.getDayOfWeek()).orElse(null);
-        if (hours == null) {
+        if (hours == null || !room.active()) {
             return Collections.emptyList();
         }
         List<Integer> result = new ArrayList<>();
