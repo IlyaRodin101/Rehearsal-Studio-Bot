@@ -17,4 +17,13 @@ public interface BaseRepository {
     /// @param id идентификатор базы
     /// @return база или пустой результат, если такой нет
     Optional<Base> findById(long id);
+
+    /// Возвращает базы владельца.
+    List<Base> findByOwnerId(long ownerId);
+
+    /// Добавляет новую базу.
+    Base save(Base base);
+
+    /// Обновляет базу с тем же идентификатором.
+    void update(Base base);
 }

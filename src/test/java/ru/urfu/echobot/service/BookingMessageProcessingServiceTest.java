@@ -8,6 +8,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import ru.urfu.echobot.bot.DummyBot;
@@ -92,6 +93,22 @@ final class BookingMessageProcessingServiceTest {
         type(CLIENT, "/start");
 
         assertEquals(List.of("Забронировать", "Мои записи", "О базе"), lastButtons());
+    }
+
+    /// Owners retain the client menu and receive the additional base-management button.
+    @Test
+    void ownerSeesBaseManagementAndClientActions() {
+        Clock clock = Clock.fixed(Instant.parse("2026-10-20T07:00:00Z"), ZoneOffset.UTC);
+        InitialData data = new InitialData(clock);
+        BookingMessageProcessingService ownerService = new BookingMessageProcessingService(
+                new InMemoryBaseRepository(data.bases()),
+                new InMemoryRoomRepository(data.rooms()),
+                new InMemoryBookingRepository(data.bookings()),
+                new BookingRules(clock), Set.of(CLIENT));
+
+        ownerService.processMessage(new Message("/start", null, List.of()), CLIENT, bot);
+
+        assertTrue(lastButtons().containsAll(List.of("Забронировать", "Мои записи", "О базе", "Базы")));
     }
 
     /// Given: клиент проходит весь диалог. When: подтверждает бронь. Then: запись создана и видна в «Мои записи».

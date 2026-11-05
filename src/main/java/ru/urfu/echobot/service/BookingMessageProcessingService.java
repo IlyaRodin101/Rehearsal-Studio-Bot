@@ -1,14 +1,19 @@
 package ru.urfu.echobot.service;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.YearMonth;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.Iterator;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+
 import org.jetbrains.annotations.NotNull;
 import ru.urfu.echobot.bot.Bot;
 import ru.urfu.echobot.repository.BaseRepository;
@@ -31,25 +36,12 @@ public final class BookingMessageProcessingService implements MessageProcessingS
     private static final String MENU_BOOK = "menu:book";
     /// Callback для возврата в главное меню.
     private static final String MENU_HOME = "menu:home";
+    /// Command to return the conversation to the main menu.
+    private static final String COMMAND_MENU = "/menu";
+    /// Command that starts a conversation.
+    private static final String COMMAND_START = "/start";
     /// Индекс часа начала в частях callback-данных.
     private static final int START_HOUR_PART = 3;
-    /// строковые константы, чтобы не ругался checkstyle
-    private final String room = "room";
-    private final String months = "months";
-    private final String month = "month";
-    private final String week = "week";
-    private final String day = "day";
-    private final String time = "time";
-    private final String hours = "hours";
-    private final String skip = "skip";
-    private final String confirm = "confirm";
-    private final String cancel = "cancel";
-    private final String list = "list";
-    /// целочисленные константы, чтобы не ругался checkstyle
-    /// Минимальное количество частей callback с идентификатором
-    private final int callbackPartsWithId = 3;
-    /// Минимальное количество частей callback для выбора времени
-    private final int callbackPartsForTime = 4;
     /// Минимальное количество частей callback без дополнительного аргумента.
     private final int callbackPartsWithoutArgument = 2;
     /// Собирает кнопки и клавиатуры для сообщений.
@@ -60,6 +52,8 @@ public final class BookingMessageProcessingService implements MessageProcessingS
     private final BookingInformationService informationService;
     /// Проверяет и обрабатывает данные клиентской формы бронирования.
     private final BookingFormService formService;
+    /// Управляет базами и залами от имени владельцев.
+    private final OwnerManagementService ownerManagementService;
     /// Транспорт, используемый для отправки ответа текущему пользователю.
     private volatile Bot transport;
     /// Состояния диалогов пользователей, индексированные по идентификатору пользователя.
@@ -82,6 +76,10 @@ public final class BookingMessageProcessingService implements MessageProcessingS
     private final Map<BookingFlow.Step, Consumer<TextContext>> textHandlers;
     /// Обработчики возврата для каждого шага диалога.
     private final Map<BookingFlow.Step, BiConsumer<Long, BookingFlow>> backHandlers;
+    /// Машина состояний
+    private final BookingStateMachine stateMachine = new BookingStateMachine();
+    /// Тайм-аут сессии
+    private static final long SESSION_TIMEOUT_MINUTES = 5;
 
     /// Создаёт обработчик сообщений с необходимыми репозиториями и правилами бронирования.
     ///
@@ -91,16 +89,23 @@ public final class BookingMessageProcessingService implements MessageProcessingS
     /// @param rules             правила бронирования
     public BookingMessageProcessingService(BaseRepository baseRepository, RoomRepository roomRepository,
                                            BookingRepository bookingRepository, BookingRules rules) {
-        BookingAvailabilityService availabilityService =
-                new BookingAvailabilityService(roomRepository, bookingRepository, rules);
+        this(baseRepository, roomRepository, bookingRepository, rules, Set.of());
+    }
+
+    /// Creates the message processor and configures the authorized owners.
+    public BookingMessageProcessingService(BaseRepository baseRepository, RoomRepository roomRepository,
+                                           BookingRepository bookingRepository,
+                                           BookingRules rules, Set<Long> ownerIds) {
+        BookingAvailabilityService availabilityService = new BookingAvailabilityService(roomRepository,
+                bookingRepository, rules);
         RussianDateFormatter formatter = new RussianDateFormatter();
-        this.selectionService = new BookingSelectionService(baseRepository, roomRepository, bookingRepository, rules,
-                availabilityService, keyboards, formatter);
-        this.informationService = new BookingInformationService(baseRepository, roomRepository, bookingRepository,
-                rules, formatter, keyboards);
-        this.formService = new BookingFormService(baseRepository, roomRepository, bookingRepository, rules,
-                new FormUtilities(new PhoneNormalizer(), formatter),
-                keyboards, selectionService);
+        this.selectionService = new BookingSelectionService(baseRepository, roomRepository,
+                bookingRepository, rules, availabilityService, keyboards, formatter);
+        this.informationService = new BookingInformationService(baseRepository, roomRepository,
+                bookingRepository, rules, formatter);
+        this.formService = new BookingFormService(baseRepository, roomRepository,
+                bookingRepository, rules, selectionService);
+        this.ownerManagementService = new OwnerManagementService(baseRepository, roomRepository, ownerIds);
         callbackHandlers = new HashMap<>();
         callbackHandlers.put(CALLBACK_BACK, context -> back(context.chatId(), context.flow()));
         callbackHandlers.put("menu", this::handleMenuAction);
@@ -108,34 +113,51 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         callbackHandlers.put(CALLBACK_ABOUT, this::handleAboutCallback);
 
         menuActionHandlers = new HashMap<>();
-        menuActionHandlers.put(CALLBACK_BOOK, context -> selectionService.beginBooking(
-                context.chatId(), context.flow(), transport));
+        menuActionHandlers.put(CALLBACK_BOOK, context -> selectionService.beginBooking(context.chatId(),
+                context.flow(), transport));
         menuActionHandlers.put("mine", context -> sendMainMenu(context.chatId(),
                 informationService.myBookingsMessage(context.userId())));
-        menuActionHandlers.put(CALLBACK_ABOUT,
-                context -> informationService.showAboutBases(context.chatId(), transport));
+        menuActionHandlers.put(CALLBACK_ABOUT, context ->
+                informationService.showAboutBases(context.chatId(), transport));
+        menuActionHandlers.put("bases", context ->
+                ownerManagementService.showBaseList(context.userId(), transport));
         menuActionHandlers.put("home", context -> returnToMenu(context.chatId(), context.flow()));
 
         bookingActionHandlers = new HashMap<>();
         bookingActionHandlers.put(CALLBACK_BASE, this::selectBase);
+        /// строковые константы, чтобы не ругался checkstyle
+        String room = "room";
         bookingActionHandlers.put(room, this::selectRoom);
+        String months = "months";
         bookingActionHandlers.put(months, this::selectMonths);
+        String month = "month";
         bookingActionHandlers.put(month, this::selectMonth);
+        String week = "week";
         bookingActionHandlers.put(week, this::selectWeek);
+        String day = "day";
         bookingActionHandlers.put(day, this::selectDay);
+        String time = "time";
         bookingActionHandlers.put(time, this::selectTime);
+        String hours = "hours";
         bookingActionHandlers.put(hours, this::selectHours);
+        String skip = "skip";
         bookingActionHandlers.put(skip, this::handleSkipComment);
+        String confirm = "confirm";
         bookingActionHandlers.put(confirm, this::handleConfirmation);
+        String cancel = "cancel";
         bookingActionHandlers.put(cancel, context -> returnToMenu(context.chatId(), context.flow()));
 
         bookingCallbackPartCounts = new HashMap<>();
+        /// Минимальное количество частей callback с идентификатором
+        int callbackPartsWithId = 3;
         bookingCallbackPartCounts.put(CALLBACK_BASE, callbackPartsWithId);
         bookingCallbackPartCounts.put(room, callbackPartsWithId);
         bookingCallbackPartCounts.put(months, callbackPartsWithId);
         bookingCallbackPartCounts.put(month, callbackPartsWithId);
         bookingCallbackPartCounts.put(week, callbackPartsWithId);
         bookingCallbackPartCounts.put(day, callbackPartsWithId);
+        /// Минимальное количество частей callback для выбора времени
+        int callbackPartsForTime = 4;
         bookingCallbackPartCounts.put(time, callbackPartsForTime);
         bookingCallbackPartCounts.put(hours, callbackPartsWithId);
         bookingCallbackPartCounts.put(skip, callbackPartsWithoutArgument);
@@ -144,47 +166,49 @@ public final class BookingMessageProcessingService implements MessageProcessingS
 
         aboutActionHandlers = new HashMap<>();
         aboutActionHandlers.put(CALLBACK_BASE, this::showSelectedBaseInformation);
-        aboutActionHandlers.put(list, context -> informationService.showAboutBases(context.chatId(), transport));
+        String list = "list";
+        aboutActionHandlers.put(list, context -> informationService.showAboutBases(context.chatId(),
+                transport));
 
         aboutCallbackPartCounts = new HashMap<>();
         aboutCallbackPartCounts.put(CALLBACK_BASE, callbackPartsWithId);
         aboutCallbackPartCounts.put(list, callbackPartsWithoutArgument);
 
         textCommandHandlers = new HashMap<>();
-        textCommandHandlers.put("/start", context -> returnToMenu(context.chatId(), context.flow()));
-        textCommandHandlers.put("/menu", context -> returnToMenu(context.chatId(), context.flow()));
+        textCommandHandlers.put(COMMAND_START, context -> returnToMenu(context.chatId(), context.flow()));
+        textCommandHandlers.put(COMMAND_MENU, context -> returnToMenu(context.chatId(), context.flow()));
         textCommandHandlers.put(BACK, context -> back(context.chatId(), context.flow()));
 
         textHandlers = new HashMap<>();
-        textHandlers.put(BookingFlow.Step.BOOK_NAME, context -> formService.handleNameText(
-                context.chatId(), context.flow(), context.text(), transport));
-        textHandlers.put(BookingFlow.Step.BOOK_PHONE, context -> formService.handlePhoneText(
-                context.chatId(), context.flow(), context.text(), transport));
-        textHandlers.put(BookingFlow.Step.BOOK_COMMENT, context -> formService.handleCommentText(
-                context.chatId(), context.flow(), context.text(), transport));
+        textHandlers.put(BookingFlow.Step.BOOK_NAME, context -> formService.handleNameText(context.chatId(),
+                context.flow(), context.text(), transport));
+        textHandlers.put(BookingFlow.Step.BOOK_PHONE, context ->
+                formService.handlePhoneText(context.chatId(), context.flow(), context.text(), transport));
+        textHandlers.put(BookingFlow.Step.BOOK_COMMENT, context ->
+                formService.handleCommentText(context.chatId(), context.flow(), context.text(), transport));
 
         backHandlers = new HashMap<>();
         backHandlers.put(BookingFlow.Step.MENU, this::returnToMenu);
         backHandlers.put(BookingFlow.Step.BOOK_BASES, this::returnToMenu);
-        backHandlers.put(BookingFlow.Step.BOOK_ROOMS,
-                (chatId, flow) -> selectionService.beginBooking(chatId, flow, transport));
-        backHandlers.put(BookingFlow.Step.BOOK_MONTH,
-                (chatId, flow) -> selectionService.showRoomChoices(chatId, flow, transport));
-        backHandlers.put(BookingFlow.Step.BOOK_WEEK,
-                (chatId, flow) -> selectionService.showMonthChoices(chatId, flow, transport));
-        backHandlers.put(BookingFlow.Step.BOOK_DAY, (chatId, flow) -> selectionService.showWeekChoices(
-                chatId, flow, flow.selectedMonth, transport));
-        backHandlers.put(BookingFlow.Step.BOOK_TIME,
-                (chatId, flow) -> selectionService.showDayChoices(chatId, flow, transport));
+        backHandlers.put(BookingFlow.Step.BOOK_ROOMS, (chatId, flow) ->
+                selectionService.beginBooking(chatId, flow, transport));
+        backHandlers.put(BookingFlow.Step.BOOK_MONTH, (chatId, flow) ->
+                selectionService.showRoomChoices(chatId, flow, transport));
+        backHandlers.put(BookingFlow.Step.BOOK_WEEK, (chatId, flow) ->
+                selectionService.showMonthChoices(chatId, flow, transport));
+        backHandlers.put(BookingFlow.Step.BOOK_DAY, (chatId, flow) ->
+                selectionService.showWeekChoices(chatId, flow, flow.selectedMonth, transport));
+        backHandlers.put(BookingFlow.Step.BOOK_TIME, (chatId, flow) ->
+                selectionService.showDayChoices(chatId, flow, transport));
         backHandlers.put(BookingFlow.Step.BOOK_DURATION, this::backFromDuration);
-        backHandlers.put(BookingFlow.Step.BOOK_NAME,
-                (chatId, flow) -> formService.backFromName(chatId, flow, transport));
-        backHandlers.put(BookingFlow.Step.BOOK_PHONE,
-                (chatId, flow) -> formService.backToName(chatId, flow, transport));
-        backHandlers.put(BookingFlow.Step.BOOK_COMMENT,
-                (chatId, flow) -> formService.backToName(chatId, flow, transport));
-        backHandlers.put(BookingFlow.Step.BOOK_CONFIRM,
-                (chatId, flow) -> formService.backToName(chatId, flow, transport));
+        backHandlers.put(BookingFlow.Step.BOOK_NAME, (chatId, flow) ->
+                formService.backFromName(chatId, flow, transport));
+        backHandlers.put(BookingFlow.Step.BOOK_PHONE, (chatId, flow) ->
+                formService.backToName(chatId, flow, transport));
+        backHandlers.put(BookingFlow.Step.BOOK_COMMENT, (chatId, flow) ->
+                formService.backToName(chatId, flow, transport));
+        backHandlers.put(BookingFlow.Step.BOOK_CONFIRM, (chatId, flow) ->
+                formService.backToName(chatId, flow, transport));
     }
 
     /// Обрабатывает входящее сообщение или callback и отправляет ответ через указанного бота.
@@ -194,6 +218,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
     /// @param bot    бот для отправки ответов
     @Override
     public void processMessage(@NotNull Message msg, long chatId, @NotNull Bot bot) {
+        cleanupExpiredFlows();
         transport = bot;
         if (msg.buttonData() != null) {
             handleCallback(msg.buttonData(), chatId);
@@ -213,11 +238,11 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         Consumer<TextContext> commandHandler = textCommandHandlers.get(text);
         if (commandHandler != null) {
             commandHandler.accept(context);
-            return;
-        }
-        Consumer<TextContext> handler = textHandlers.get(flow.step);
-        if (handler != null) {
-            handler.accept(context);
+        } else if (!ownerManagementService.handleText(chatId, text, transport)) {
+            Consumer<TextContext> handler = textHandlers.get(flow.step);
+            if (handler != null) {
+                handler.accept(context);
+            }
         }
     }
 
@@ -227,6 +252,10 @@ public final class BookingMessageProcessingService implements MessageProcessingS
     /// @param chatId идентификатор чата пользователя
     private void handleCallback(String data, long chatId) {
         String[] parts = data.split(":");
+        if ("owner".equals(parts[0])) {
+            ownerManagementService.handleCallback(chatId, parts, transport);
+            return;
+        }
         CallbackContext context = new CallbackContext(chatId, chatId, flow(chatId), parts);
         Consumer<CallbackContext> handler = callbackHandlers.get(parts[0]);
         if (handler != null) {
@@ -238,6 +267,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
     ///
     /// @param context контекст callback-команды
     private void handleMenuAction(CallbackContext context) {
+        ownerManagementService.cancel(context.userId());
         if (context.parts().length < callbackPartsWithoutArgument) {
             return;
         }
@@ -292,7 +322,13 @@ public final class BookingMessageProcessingService implements MessageProcessingS
     ///
     /// @param context контекст callback-команды
     private void selectRoom(CallbackContext context) {
-        context.flow().roomId = Long.parseLong(context.parts()[callbackPartsWithoutArgument]);
+        long roomId = Long.parseLong(context.parts()[callbackPartsWithoutArgument]);
+        boolean availableRoom = selectionService.isAvailableRoom(context.flow().baseId, roomId);
+        if (!availableRoom) {
+            selectionService.showRoomChoices(context.chatId(), context.flow(), transport);
+            return;
+        }
+        context.flow().roomId = roomId;
         context.flow().monthOffset = 0;
         selectionService.showMonthChoices(context.chatId(), context.flow(), transport);
     }
@@ -366,9 +402,9 @@ public final class BookingMessageProcessingService implements MessageProcessingS
             if (created) {
                 sendMainMenu(context.chatId(), "Готово, запись создана.");
             } else {
-                send(context.chatId(), "Это время больше недоступно. Выберите другое время.", keyboards.choices(
-                        keyboards.button("Выбрать время", MENU_BOOK),
-                        keyboards.button("Главное меню", MENU_HOME)));
+                send(context.chatId(), "Это время больше недоступно. Выберите другое время.",
+                        keyboards.choices(keyboards.button("Выбрать время", MENU_BOOK),
+                                keyboards.button("Главное меню", MENU_HOME)));
             }
         }
     }
@@ -399,6 +435,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
     /// @param chatId идентификатор чата пользователя
     /// @param flow   состояние диалога пользователя
     private void returnToMenu(long chatId, BookingFlow flow) {
+        ownerManagementService.cancel(chatId);
         flow.clearBooking();
         flow.step = BookingFlow.Step.MENU;
         showMainMenu(chatId);
@@ -421,6 +458,9 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         rows.add(keyboards.row(keyboards.button("Забронировать", MENU_BOOK),
                 keyboards.button("Мои записи", "menu:mine")));
         rows.add(keyboards.row(keyboards.button("О базе", "menu:about")));
+        if (ownerManagementService.isOwner(chatId)) {
+            rows.add(keyboards.row(keyboards.button("Базы", "menu:bases")));
+        }
         send(chatId, "Здравствуйте! Что хотите сделать?", rows);
     }
 
@@ -438,7 +478,9 @@ public final class BookingMessageProcessingService implements MessageProcessingS
     /// @param userId идентификатор пользователя
     /// @return состояние диалога пользователя
     private BookingFlow flow(long userId) {
-        return flows.computeIfAbsent(userId, id -> new BookingFlow());
+        BookingFlow flow = flows.computeIfAbsent(userId, id -> new BookingFlow());
+        flow.updateLastActivity();
+        return flow;
     }
 
     /// Отправляет текстовое сообщение с клавиатурой.
@@ -449,6 +491,29 @@ public final class BookingMessageProcessingService implements MessageProcessingS
     private void send(long chatId, String text, List<List<Button>> keyboard) {
         List<List<Button>> safeKeyboard = keyboard == null ? List.of() : keyboard;
         transport.sendMessage(new Message(text, null, safeKeyboard), chatId);
+    }
+
+    private void cleanupExpiredFlows() {
+        Iterator<Map.Entry<Long, BookingFlow>> iterator = flows.entrySet().iterator();
+        LocalDateTime currentTime = LocalDateTime.now();
+
+        while (iterator.hasNext()) {
+            Map.Entry<Long, BookingFlow> entry = iterator.next();
+            LocalDateTime lastActivityAt = entry.getValue().getLastActivityAt();
+            long inactiveMinutes = ChronoUnit.MINUTES.between(lastActivityAt, currentTime);
+
+            if (inactiveMinutes >= SESSION_TIMEOUT_MINUTES) {
+                iterator.remove();
+            }
+        }
+
+    }
+
+    private boolean transition(BookingFlow flow, BookingStateMachine.Event event) {
+        if (!stateMachine.transition(flow, event)) {
+            return false;
+        }
+        return true;
     }
 
     /// Данные callback-команды, необходимые обработчику.

@@ -1,6 +1,7 @@
 package ru.urfu.echobot.service;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.YearMonth;
 
 /// Хранит шаг и введённые данные одного пользовательского диалога бронирования.
@@ -11,6 +12,8 @@ final class BookingFlow {
         BOOK_NAME, BOOK_PHONE, BOOK_COMMENT, BOOK_CONFIRM
     }
 
+    /// время последней активности пользователя
+    private LocalDateTime lastActivityAt;
     /// Текущий шаг диалога.
     Step step = Step.MENU;
     /// Идентификатор выбранной базы.
@@ -38,6 +41,19 @@ final class BookingFlow {
 
     /// Создаёт состояние диалога, установленное на главное меню.
     BookingFlow() {
+        lastActivityAt = LocalDateTime.now();
+    }
+
+    /// Обновляет время последней активности пользователя
+    void updateLastActivity() {
+
+        lastActivityAt = LocalDateTime.now();
+    }
+
+    /// Геттер последней активности пользователя
+    LocalDateTime getLastActivityAt() {
+
+        return lastActivityAt;
     }
 
     /// Сбрасывает параметры бронирования, сохраняя текущий шаг диалога.

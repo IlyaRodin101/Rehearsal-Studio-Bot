@@ -29,9 +29,7 @@ public final class BookingInformationService {
     /// Форматер дат и времени.
     private final RussianDateFormatter formatter;
     /// Фабрика клавиатур.
-    private final BookingKeyboardFactory keyboards;
-    /// строковые константы, чтобы не ругался checkstyle
-    private final String home = "menu:home";
+    private final BookingKeyboardFactory keyboards = new BookingKeyboardFactory();
     private final String back = "Назад";
 
     /// Создаёт сервис отображения броней и информации о базах.
@@ -41,16 +39,14 @@ public final class BookingInformationService {
     /// @param bookingRepository хранилище броней
     /// @param rules             правила бронирования
     /// @param formatter         форматер дат и времени
-    /// @param keyboards         фабрика клавиатур
     public BookingInformationService(BaseRepository baseRepository, RoomRepository roomRepository,
                                      BookingRepository bookingRepository, BookingRules rules,
-                                     RussianDateFormatter formatter, BookingKeyboardFactory keyboards) {
+                                     RussianDateFormatter formatter) {
         this.baseRepository = baseRepository;
         this.roomRepository = roomRepository;
         this.bookingRepository = bookingRepository;
         this.rules = rules;
         this.formatter = formatter;
-        this.keyboards = keyboards;
     }
 
     /// Возвращает текст со списком будущих броней выбранного пользователя.
@@ -80,6 +76,7 @@ public final class BookingInformationService {
     /// @param bot    бот для отправки сообщений
     public void showAboutBases(long chatId, Bot bot) {
         List<Base> bases = baseRepository.findAll();
+        String home = "menu:home";
         if (bases.isEmpty()) {
             send(bot, chatId, "Пока нет доступных баз.",
                     keyboards.choices(keyboards.button(back, home)));
