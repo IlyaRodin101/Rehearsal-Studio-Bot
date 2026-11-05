@@ -30,3 +30,5 @@ secrets/
 bookings.db
 database.db-shm
 database.db-wal
+
+command.txt

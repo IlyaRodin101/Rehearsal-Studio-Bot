@@ -1,4 +1,4 @@
-$env:TELEGRAM_TOKEN="8964528363:AAH5Sf3pQ-sXG8iRwMZgkdscasrObY75wz0"
+$env:TELEGRAM_TOKEN=""
 $env:OWNER_IDS="1205250048"
 $env:DATABASE_PATH="bookings.db"
 $env:BOT_USERNAME="https://t.me/riddle_diddle_paradiddle_bot"

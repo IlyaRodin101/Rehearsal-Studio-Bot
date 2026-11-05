@@ -76,6 +76,8 @@ public final class BookingMessageProcessingService implements MessageProcessingS
     private final Map<BookingFlow.Step, Consumer<TextContext>> textHandlers;
     /// Обработчики возврата для каждого шага диалога.
     private final Map<BookingFlow.Step, BiConsumer<Long, BookingFlow>> backHandlers;
+    /// Машина состояний
+    private final BookingStateMachine stateMachine = new BookingStateMachine();
     /// Тайм-аут сессии
     private static final long SESSION_TIMEOUT_MINUTES = 5;
 
@@ -504,6 +506,13 @@ public final class BookingMessageProcessingService implements MessageProcessingS
             }
         }
 
+    }
+
+    private boolean transition(BookingFlow flow, BookingStateMachine.Event event){
+        if (!stateMachine.transition(flow, event)) {
+            return false;
+        }
+        return true;
     }
 
     /// Данные callback-команды, необходимые обработчику.
