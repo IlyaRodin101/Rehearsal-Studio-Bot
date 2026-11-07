@@ -96,6 +96,56 @@ public final class SqliteBaseRepository implements BaseRepository {
         }
     }
 
+    @Override
+    public boolean deleteByIdAndOwnerId(long id, long ownerId) {
+        try (Connection connection = database.open()) {
+            connection.setAutoCommit(false);
+            try {
+                if (!baseExists(connection, id, ownerId)) {
+                    connection.rollback();
+                    return false;
+                }
+                deleteRelatedRows(connection, "DELETE FROM bookings WHERE room_id IN "
+                        + "(SELECT id FROM rooms WHERE base_id=?)", id);
+                deleteRelatedRows(connection, "DELETE FROM rooms WHERE base_id=?", id);
+                deleteRelatedRows(connection, "DELETE FROM opening_hours WHERE base_id=?", id);
+                try (PreparedStatement statement = connection.prepareStatement(
+                        "DELETE FROM bases WHERE id=? AND owner_id=?")) {
+                    statement.setLong(1, id);
+                    statement.setLong(2, ownerId);
+                    if (statement.executeUpdate() != 1) {
+                        throw new IllegalStateException("Base changed while it was being deleted: " + id);
+                    }
+                }
+                connection.commit();
+                return true;
+            } catch (SQLException | RuntimeException exception) {
+                connection.rollback();
+                throw exception;
+            }
+        } catch (SQLException exception) {
+            throw new IllegalStateException("Could not delete base", exception);
+        }
+    }
+
+    private boolean baseExists(Connection connection, long id, long ownerId) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement(
+                "SELECT 1 FROM bases WHERE id=? AND owner_id=?")) {
+            statement.setLong(1, id);
+            statement.setLong(2, ownerId);
+            try (ResultSet rows = statement.executeQuery()) {
+                return rows.next();
+            }
+        }
+    }
+
+    private void deleteRelatedRows(Connection connection, String sql, long baseId) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setLong(1, baseId);
+            statement.executeUpdate();
+        }
+    }
+
     private List<Base> queryBases(String sql, Long parameter) {
         try (Connection connection = database.open();
              PreparedStatement statement = connection.prepareStatement(sql)) {

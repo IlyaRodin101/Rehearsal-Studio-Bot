@@ -74,6 +74,8 @@ public final class OwnerManagementService {
                 case "add" -> beginCreate(userId, bot);
                 case "base" -> selectBase(userId, Long.parseLong(parts[2]), bot);
                 case "setting" -> showBaseMenu(userId, bot);
+                case "deletebase" -> confirmBaseDelete(userId, Long.parseLong(parts[2]), bot);
+                case "deletebaseyes" -> deleteBase(userId, Long.parseLong(parts[2]), bot);
                 case "edit" -> beginEdit(userId, parts[2], bot);
                 case "schedule" -> showSchedule(userId, bot);
                 case "day" -> showDay(userId, Integer.parseInt(parts[2]), bot);
@@ -263,8 +265,36 @@ public final class OwnerManagementService {
                 button("График работы", "owner:schedule")));
         rows.add(keyboards.row(button("Залы", "owner:rooms"), button("Срок бронирования", "owner:edit:lead")));
         rows.add(keyboards.row(button("Оборудование", "owner:edit:equipment")));
+        rows.add(keyboards.row(button("Удалить базу", "owner:deletebase:" + base.id())));
         rows.add(keyboards.row(button("Назад", "owner:list")));
         send(bot, userId, "База «" + base.name() + "». Что изменить?", rows);
+    }
+
+    private void confirmBaseDelete(long userId, long baseId, Bot bot) {
+        State state = state(userId);
+        Base base = baseRepository.findById(baseId).orElse(null);
+        if (base == null || base.ownerId() != userId || state.selectedBaseId != baseId) {
+            send(bot, userId, "Действие недоступно.", backKeyboard());
+            return;
+        }
+        state.step = Step.DELETE_BASE;
+        send(bot, userId, "Удалить базу «" + base.name()
+                + "» вместе со всеми залами и записями? Это действие нельзя отменить.",
+                choices(button("Удалить базу", "owner:deletebaseyes:" + base.id()),
+                        button("Отмена", "owner:setting")));
+    }
+
+    private void deleteBase(long userId, long baseId, Bot bot) {
+        State state = state(userId);
+        Base base = baseRepository.findById(baseId).orElse(null);
+        if (state.step != Step.DELETE_BASE || base == null || base.ownerId() != userId
+                || state.selectedBaseId != baseId || !baseRepository.deleteByIdAndOwnerId(baseId, userId)) {
+            send(bot, userId, "Действие недоступно.", backKeyboard());
+            return;
+        }
+        state.reset();
+        showBaseList(userId, bot);
+        send(bot, userId, "База «" + base.name() + "» удалена.", baseListButtons(userId));
     }
 
     private void beginEdit(long userId, String field, Bot bot) {
@@ -758,7 +788,7 @@ public final class OwnerManagementService {
         IDLE, CREATE_NAME, CREATE_ADDRESS, CREATE_TIMEZONE, CREATE_OPENING, CREATE_CLOSING, CREATE_ROOM_NAME,
         CREATE_ROOM_REQUIRED, CREATE_MORE_ROOMS, CREATE_LEAD, CREATE_EQUIPMENT, ROOM_CREATE_NAME,
         ROOM_CREATE_REQUIRED, EDIT_NAME, EDIT_ADDRESS,
-        EDIT_TIMEZONE, EDIT_EQUIPMENT, ROOM_EDIT_NAME, DELETE_ROOM
+        EDIT_TIMEZONE, EDIT_EQUIPMENT, ROOM_EDIT_NAME, DELETE_ROOM, DELETE_BASE
     }
 
     private static final class State {

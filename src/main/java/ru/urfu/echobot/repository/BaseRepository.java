@@ -26,4 +26,11 @@ public interface BaseRepository {
 
     /// Обновляет базу с тем же идентификатором.
     void update(Base base);
+
+    /// Удаляет базу, если она принадлежит указанному владельцу.
+    ///
+    /// @param id      идентификатор базы
+    /// @param ownerId идентификатор владельца
+    /// @return true, если база удалена
+    boolean deleteByIdAndOwnerId(long id, long ownerId);
 }

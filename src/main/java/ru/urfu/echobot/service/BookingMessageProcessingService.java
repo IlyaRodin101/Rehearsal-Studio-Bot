@@ -3,6 +3,8 @@ package ru.urfu.echobot.service;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -36,6 +38,9 @@ public final class BookingMessageProcessingService implements MessageProcessingS
     private static final String MENU_BOOK = "menu:book";
     /// Callback для возврата в главное меню.
     private static final String MENU_HOME = "menu:home";
+    /// Формат времени начала записи в callback-кнопках раздела «Мои записи».
+    private static final DateTimeFormatter BOOKING_CALLBACK_START_FORMAT =
+            DateTimeFormatter.ofPattern("yyyyMMddHHmm");
     /// Command to return the conversation to the main menu.
     private static final String COMMAND_MENU = "/menu";
     /// Command that starts a conversation.
@@ -111,12 +116,13 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         callbackHandlers.put("menu", this::handleMenuAction);
         callbackHandlers.put(CALLBACK_BOOK, this::handleBookingCallback);
         callbackHandlers.put(CALLBACK_ABOUT, this::handleAboutCallback);
+        callbackHandlers.put("mine", this::handleMyBookingCallback);
 
         menuActionHandlers = new HashMap<>();
         menuActionHandlers.put(CALLBACK_BOOK, context -> selectionService.beginBooking(context.chatId(),
                 context.flow(), transport));
-        menuActionHandlers.put("mine", context -> sendMainMenu(context.chatId(),
-                informationService.myBookingsMessage(context.userId())));
+        menuActionHandlers.put("mine", context -> informationService.showMyBookings(context.chatId(),
+                context.userId(), transport));
         menuActionHandlers.put(CALLBACK_ABOUT, context ->
                 informationService.showAboutBases(context.chatId(), transport));
         menuActionHandlers.put("bases", context ->
@@ -306,6 +312,34 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         Consumer<CallbackContext> handler = aboutActionHandlers.get(action);
         if (requiredParts != null && context.parts().length >= requiredParts && handler != null) {
             handler.accept(context);
+        }
+    }
+
+    /// Обрабатывает действия с записями клиента.
+    ///
+    /// @param context контекст callback-команды
+    private void handleMyBookingCallback(CallbackContext context) {
+        if (context.parts().length == callbackPartsWithoutArgument && "list".equals(context.parts()[1])) {
+            informationService.showMyBookings(context.chatId(), context.userId(), transport);
+            return;
+        }
+        if (context.parts().length != 4) {
+            send(context.chatId(), "Действие недоступно.", keyboards.backKeyboard());
+            return;
+        }
+        try {
+            long roomId = Long.parseLong(context.parts()[2]);
+            LocalDateTime start = LocalDateTime.parse(context.parts()[3], BOOKING_CALLBACK_START_FORMAT);
+            if ("cancel".equals(context.parts()[1])) {
+                informationService.confirmBookingCancellation(context.chatId(), context.userId(), roomId,
+                        start, transport);
+            } else if ("cancelyes".equals(context.parts()[1])) {
+                informationService.cancelBooking(context.chatId(), context.userId(), roomId, start, transport);
+            } else {
+                send(context.chatId(), "Действие недоступно.", keyboards.backKeyboard());
+            }
+        } catch (NumberFormatException | DateTimeParseException exception) {
+            send(context.chatId(), "Действие недоступно.", keyboards.backKeyboard());
         }
     }
 

@@ -131,6 +131,40 @@ final class BookingMessageProcessingServiceTest {
                 && m.text().contains("Центр, Зал 1") && m.text().contains("18:00-20:00")));
     }
 
+    /// Клиент отменяет свою будущую запись после подтверждения; другой клиент не может её отменить.
+    @Test
+    void clientCanCancelOwnBookingButNotAnotherClientsBooking() {
+        chooseSlot(CLIENT, 1, 1, "2026-10-24", 18);
+        type(CLIENT, "Анна");
+        type(CLIENT, "+7 999 123-45-67");
+        press(CLIENT, "book:skip");
+        press(CLIENT, "book:confirm");
+        press(CLIENT, "menu:mine");
+
+        assertTrue(lastButtons().contains("Отменить • Центр • Зал 1"));
+        String confirmationCallback = bot.lastMessage().keyboard().stream()
+                .flatMap(List::stream)
+                .map(Button::data)
+                .filter(data -> data.startsWith("mine:cancel:"))
+                .findFirst()
+                .orElseThrow();
+        press(CLIENT, confirmationCallback);
+        assertTrue(lastButtons().contains("Подтвердить отмену"));
+        String cancelCallback = bot.lastMessage().keyboard().stream()
+                .flatMap(List::stream)
+                .map(Button::data)
+                .filter(data -> data.startsWith("mine:cancelyes:"))
+                .findFirst()
+                .orElseThrow();
+
+        press(OTHER_CLIENT, cancelCallback);
+        assertTrue(lastText().contains("Запись не найдена"));
+        press(CLIENT, cancelCallback);
+
+        assertTrue(bot.messages().stream().anyMatch(m -> "Запись отменена.".equals(m.text())));
+        assertEquals("У вас пока нет будущих записей.", lastText());
+    }
+
     /// Given: у клиента нет записей. When: открывает «Мои записи». Then: бот сообщает, что записей нет.
     @Test
     void myBookingsIsEmptyForNewClient() {

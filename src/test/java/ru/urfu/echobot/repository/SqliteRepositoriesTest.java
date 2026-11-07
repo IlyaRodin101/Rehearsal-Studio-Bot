@@ -72,6 +72,22 @@ final class SqliteRepositoriesTest {
     }
 
     @Test
+    void deletingOwnedBaseRemovesItsRoomsScheduleAndBookings() {
+        Base base = bases.save(new Base(0, 101, "Центр", "Ленина, 1", "Europe/Moscow",
+                2, "", Map.of(DayOfWeek.MONDAY, new OpeningHours(9, 24))));
+        Room room = rooms.save(new Room(0, base.id(), "Зал 1", false));
+        bookings.addIfFree(booking(room.id(), 201, START, 2));
+
+        assertFalse(bases.deleteByIdAndOwnerId(base.id(), 102));
+        assertEquals(1, bookings.findByUser(201).size());
+        assertTrue(bases.deleteByIdAndOwnerId(base.id(), 101));
+
+        assertTrue(bases.findById(base.id()).isEmpty());
+        assertTrue(rooms.findById(room.id()).isEmpty());
+        assertTrue(bookings.findByUser(201).isEmpty());
+    }
+
+    @Test
     void simultaneousConflictingBookingsAllowExactlyOneWinner() throws Exception {
         Base base = bases.save(new Base(0, 101, "Центр", "Ленина, 1", "Europe/Moscow",
                 2, "", Map.of()));

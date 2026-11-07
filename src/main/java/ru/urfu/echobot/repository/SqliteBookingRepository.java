@@ -84,6 +84,20 @@ public final class SqliteBookingRepository implements BookingRepository {
         }
     }
 
+    @Override
+    public boolean deleteByUserAndRoomAndStart(long userId, long roomId, LocalDateTime start) {
+        try (Connection connection = database.open();
+             PreparedStatement statement = connection.prepareStatement(
+                     "DELETE FROM bookings WHERE user_id=? AND room_id=? AND start_time=?")) {
+            statement.setLong(USER_PARAMETER, userId);
+            statement.setLong(ROOM_PARAMETER, roomId);
+            statement.setString(START_PARAMETER, start.toString());
+            return statement.executeUpdate() == 1;
+        } catch (SQLException exception) {
+            throw new IllegalStateException("Could not delete booking", exception);
+        }
+    }
+
     private boolean hasConflict(Connection connection, long roomId, LocalDateTime start, LocalDateTime end)
             throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement(

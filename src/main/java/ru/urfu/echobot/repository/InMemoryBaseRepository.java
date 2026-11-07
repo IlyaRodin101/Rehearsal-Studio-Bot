@@ -53,4 +53,9 @@ public final class InMemoryBaseRepository implements BaseRepository {
         }
         throw new IllegalArgumentException("Base does not exist: " + base.id());
     }
+
+    @Override
+    public synchronized boolean deleteByIdAndOwnerId(long id, long ownerId) {
+        return bases.removeIf(base -> base.id() == id && base.ownerId() == ownerId);
+    }
 }

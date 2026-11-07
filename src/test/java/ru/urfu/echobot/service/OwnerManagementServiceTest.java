@@ -100,6 +100,31 @@ final class OwnerManagementServiceTest {
         assertEquals("Центр", bases.findById(1).orElseThrow().name());
     }
 
+    @Test
+    void ownerCanDeleteOwnBaseAfterConfirmation() {
+        press(OWNER, "owner:base:1");
+        assertTrue(bot.lastMessage().keyboard().stream()
+                .flatMap(List::stream)
+                .anyMatch(button -> "Удалить базу".equals(button.text())));
+
+        press(OWNER, "owner:deletebase:1");
+        assertTrue(bot.lastMessage().text().contains("вместе со всеми залами и записями"));
+        press(OWNER, "owner:deletebaseyes:1");
+
+        assertTrue(bases.findById(1).isEmpty());
+        assertEquals("База «Центр» удалена.", bot.lastMessage().text());
+    }
+
+    @Test
+    void ownerCannotDeleteAnotherOwnersBase() {
+        press(OWNER, "owner:base:1");
+
+        service.handleCallback(OTHER_OWNER, "owner:deletebase:1".split(":"), bot);
+
+        assertEquals("Действие недоступно.", bot.lastMessage().text());
+        assertTrue(bases.findById(1).isPresent());
+    }
+
     private void press(long userId, String data) {
         service.handleCallback(userId, data.split(":"), bot);
     }

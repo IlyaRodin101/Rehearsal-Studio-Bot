@@ -42,4 +42,11 @@ public final class InMemoryBookingRepository implements BookingRepository {
                 .sorted(Comparator.comparing(Booking::start))
                 .toList();
     }
+
+    @Override
+    public synchronized boolean deleteByUserAndRoomAndStart(long userId, long roomId, LocalDateTime start) {
+        return bookings.removeIf(booking -> booking.userId() == userId
+                && booking.roomId() == roomId
+                && booking.start().equals(start));
+    }
 }
