@@ -11,14 +11,12 @@ import ru.urfu.echobot.repository.BaseRepository;
 import ru.urfu.echobot.repository.BookingRepository;
 import ru.urfu.echobot.repository.RoomRepository;
 
-/// Обрабатывает ввод данных клиента, подтверждение формы и создание бронирования.
+/// Обрабатывает ввод контактных данных и создаёт бронирование.
 public final class BookingFormService {
     /// Текст запроса имени клиента.
     private static final String ENTER_NAME = "Введите имя для связи.";
     /// Текст запроса номера телефона.
     private static final String ENTER_PHONE = "Введите номер телефона для связи.";
-    /// Подпись кнопки возврата.
-    private static final String BACK = "Назад";
 
     /// Хранилище баз.
     private final BaseRepository baseRepository;
@@ -28,61 +26,70 @@ public final class BookingFormService {
     private final BookingRepository bookingRepository;
     /// Правила проверки бронирования.
     private final BookingRules rules;
+    /// Автомат состояний диалога.
+    private final BookingStateMachine stateMachine;
+    /// Сервис комментария и подтверждения.
+    private final BookingConfirmationService confirmation;
     /// Нормализатор российских номеров телефонов.
     private final PhoneNormalizer phoneNormalizer = new PhoneNormalizer();
-    /// Форматер дат и времени.
-    private final RussianDateFormatter formatter = new RussianDateFormatter();
     /// Фабрика клавиатур.
     private final BookingKeyboardFactory keyboards = new BookingKeyboardFactory();
-    /// Сервис выбора базы, зала, даты и времени.
-    private final BookingSelectionService selectionService;
 
-    /// Создаёт обработчик данных формы бронирования.
+    /// Создаёт обработчик формы бронирования.
     ///
     /// @param baseRepository    хранилище баз
     /// @param roomRepository    хранилище залов
     /// @param bookingRepository хранилище броней
     /// @param rules             правила бронирования
-    /// @param selectionService  сервис выбора слота
+    /// @param stateMachine      автомат состояний диалога
+    /// @param confirmation      сервис комментария и подтверждения
     public BookingFormService(BaseRepository baseRepository, RoomRepository roomRepository,
-                              BookingRepository bookingRepository,
-                              BookingRules rules, BookingSelectionService selectionService) {
+                              BookingRepository bookingRepository, BookingRules rules,
+                              BookingStateMachine stateMachine, BookingConfirmationService confirmation) {
         this.baseRepository = baseRepository;
         this.roomRepository = roomRepository;
         this.bookingRepository = bookingRepository;
         this.rules = rules;
-        this.selectionService = selectionService;
+        this.stateMachine = stateMachine;
+        this.confirmation = confirmation;
     }
 
-    /// Открывает шаг ввода контактных данных после выбора длительности брони.
+    /// Просит клиента ввести имя.
     ///
-    /// @param chatId идентификатор Telegram-чата
-    /// @param flow   состояние диалога
+    /// @param chatId идентификатор чата
     /// @param bot    бот для отправки сообщения
-    public void beginCustomerDetails(long chatId, BookingFlow flow, Bot bot) {
-        flow.step = BookingFlow.Step.BOOK_NAME;
+    public void promptName(long chatId, Bot bot) {
         send(bot, chatId, ENTER_NAME, keyboards.backKeyboard());
     }
 
-    /// Проверяет имя клиента и переводит форму к вводу номера телефона.
+    /// Проверяет имя и переводит форму к вводу телефона.
     ///
-    /// @param chatId идентификатор Telegram-чата
+    /// @param chatId идентификатор чата
     /// @param flow   состояние диалога
     /// @param text   введённый текст
     /// @param bot    бот для отправки сообщения
     public void handleNameText(long chatId, BookingFlow flow, String text, Bot bot) {
         if (text.isEmpty()) {
-            send(bot, chatId, ENTER_NAME, keyboards.backKeyboard());
-            return;
+            promptName(chatId, bot);
+        } else {
+            flow.name = text;
+            if (stateMachine.transition(flow, BookingStateMachine.Event.ENTER_NAME)) {
+                promptPhone(chatId, bot);
+            }
         }
-        flow.name = text;
-        flow.step = BookingFlow.Step.BOOK_PHONE;
+    }
+
+    /// Просит клиента ввести номер телефона.
+    ///
+    /// @param chatId идентификатор чата
+    /// @param bot    бот для отправки сообщения
+    public void promptPhone(long chatId, Bot bot) {
         send(bot, chatId, ENTER_PHONE, keyboards.backKeyboard());
     }
 
-    /// Проверяет и сохраняет номер телефона клиента.
+    /// Проверяет телефон и переводит форму к вводу комментария.
     ///
-    /// @param chatId идентификатор Telegram-чата
+    /// @param chatId идентификатор чата
     /// @param flow   состояние диалога
     /// @param text   введённый номер
     /// @param bot    бот для отправки сообщения
@@ -91,47 +98,19 @@ public final class BookingFormService {
         if (normalizedPhone.isEmpty()) {
             send(bot, chatId, "Не удалось распознать номер. Введите российский номер, например\n"
                     + "+7 999 123-45-67 или 8 999 123-45-67.", keyboards.backKeyboard());
-            return;
-        }
-        flow.phone = normalizedPhone.get();
-        askBookingComment(chatId, flow, bot);
-    }
-
-    /// Проверяет комментарий и открывает страницу подтверждения бронирования.
-    ///
-    /// @param chatId идентификатор Telegram-чата
-    /// @param flow   состояние диалога
-    /// @param text   комментарий клиента
-    /// @param bot    бот для отправки сообщения
-    public void handleCommentText(long chatId, BookingFlow flow, String text, Bot bot) {
-        Room selectedRoom = roomRepository.findById(flow.roomId).orElse(null);
-        if (text.isEmpty() || (selectedRoom != null && selectedRoom.commentRequired() && "-".equals(text))) {
-            send(bot, chatId, "Комментарий не может быть пустым. Опишите, что будете делать.",
-                    keyboards.commentKeyboard());
-            return;
-        }
-        flow.comment = text;
-        showBookingConfirmation(chatId, flow, bot);
-    }
-
-    /// Разрешает пропустить комментарий только для зала, где он необязателен.
-    ///
-    /// @param chatId идентификатор Telegram-чата
-    /// @param flow   состояние диалога
-    /// @param bot    бот для отправки сообщения
-    public void skipBookingComment(long chatId, BookingFlow flow, Bot bot) {
-        Room room = roomRepository.findById(flow.roomId).orElse(null);
-        if (flow.step == BookingFlow.Step.BOOK_COMMENT && room != null && !room.commentRequired()) {
-            flow.comment = "";
-            showBookingConfirmation(chatId, flow, bot);
+        } else {
+            flow.phone = normalizedPhone.get();
+            if (stateMachine.transition(flow, BookingStateMachine.Event.VALID_PHONE)) {
+                confirmation.promptComment(chatId, flow, bot);
+            }
         }
     }
 
     /// Создаёт бронь, если время всё ещё свободно и соответствует правилам базы.
     ///
-    /// @param userId идентификатор пользователя, которому принадлежит бронь
+    /// @param userId идентификатор пользователя
     /// @param flow   заполненное состояние диалога
-    /// @return true, если бронь сохранена; false, если слот недоступен
+    /// @return true, если бронь сохранена
     public boolean confirmBooking(long userId, BookingFlow flow) {
         LocalDateTime start = flow.bookingDate.atTime(flow.startHour, 0);
         Base base = baseRepository.findById(flow.baseId).orElse(null);
@@ -142,84 +121,26 @@ public final class BookingFormService {
                 flow.name, flow.phone, flow.comment == null ? "" : flow.comment));
     }
 
-    /// Возвращает пользователя к выбору длительности и очищает введённые данные клиента.
-    ///
-    /// @param chatId идентификатор Telegram-чата
-    /// @param flow   состояние диалога
-    /// @param bot    бот для отправки сообщения
-    public void backFromName(long chatId, BookingFlow flow, Bot bot) {
-        clearCustomerDetails(flow);
-        selectionService.showDurationChoices(chatId, flow, bot);
-    }
-
-    /// Возвращает пользователя к вводу имени и очищает все введённые данные клиента.
-    ///
-    /// @param chatId идентификатор Telegram-чата
-    /// @param flow   состояние диалога
-    /// @param bot    бот для отправки сообщения
-    public void backToName(long chatId, BookingFlow flow, Bot bot) {
-        clearCustomerDetails(flow);
-        flow.step = BookingFlow.Step.BOOK_NAME;
-        send(bot, chatId, ENTER_NAME, keyboards.backKeyboard());
-    }
-
-    /// Запрашивает комментарий с учётом обязательности для выбранного зала.
-    ///
-    /// @param chatId идентификатор Telegram-чата
-    /// @param flow   состояние диалога
-    /// @param bot    бот для отправки сообщения
-    private void askBookingComment(long chatId, BookingFlow flow, Bot bot) {
-        Room room = roomRepository.findById(flow.roomId).orElse(null);
-        if (room == null) {
-            selectionService.beginBooking(chatId, flow, bot);
-            return;
-        }
-        flow.step = BookingFlow.Step.BOOK_COMMENT;
-        String prompt = room.commentRequired()
-                ? "Опишите, что будете делать в зале. Например, запись барабанов и баса."
-                : "Оставьте комментарий к записи (необязательно). Например, что нужно подключить.";
-        send(bot, chatId, prompt, room.commentRequired() ? keyboards.backKeyboard() : keyboards.commentKeyboard());
-    }
-
-    /// Показывает детали бронирования перед подтверждением.
-    ///
-    /// @param chatId идентификатор Telegram-чата
-    /// @param flow   состояние диалога
-    /// @param bot    бот для отправки сообщения
-    private void showBookingConfirmation(long chatId, BookingFlow flow, Bot bot) {
-        Base base = baseRepository.findById(flow.baseId).orElse(null);
-        Room room = roomRepository.findById(flow.roomId).orElse(null);
-        if (base == null || room == null
-                || (room.commentRequired() && (flow.comment == null || flow.comment.isEmpty()))) {
-            send(bot, chatId, "В этом зале комментарий обязателен. Опишите, что будете делать.",
-                    keyboards.backKeyboard());
-            flow.step = BookingFlow.Step.BOOK_COMMENT;
-            return;
-        }
-        LocalDateTime start = flow.bookingDate.atTime(flow.startHour, 0);
-        LocalDateTime end = start.plusHours(flow.hours);
-        flow.step = BookingFlow.Step.BOOK_CONFIRM;
-        String text = "Проверьте:\nБаза «" + base.name() + "», " + room.name() + ", "
-                + formatter.dateTime(start) + "-" + formatter.endTime(start, end) + ".\n"
-                + "Имя: " + flow.name + "\nТелефон: " + flow.phone + "\nКомментарий: "
-                + (flow.comment == null || flow.comment.isEmpty() ? "—" : flow.comment);
-        send(bot, chatId, text, keyboards.choices(keyboards.button("Подтвердить", "book:confirm"),
-                keyboards.button(BACK, "back"), keyboards.button("Отмена", "book:cancel")));
-    }
-
-    /// Удаляет все введённые клиентом сведения, оставляя выбранный слот без изменений.
+    /// Удаляет все введённые клиентом сведения.
     ///
     /// @param flow состояние диалога
-    private void clearCustomerDetails(BookingFlow flow) {
+    public void clearCustomerDetails(BookingFlow flow) {
         flow.name = null;
         flow.phone = null;
         flow.comment = null;
     }
 
+    /// Очищает только номер телефона при возврате к вводу имени.
+    ///
+    /// @param flow состояние диалога
+    public void clearPhone(BookingFlow flow) {
+        flow.phone = null;
+    }
+
     /// Отправляет текстовое сообщение с клавиатурой.
     ///
-    /// @param bot      транспорт для отправки сообщения
-    /// @param chatId   идентификатор Telegram-чата
+    /// @param bot      бот для отправки
+    /// @param chatId   идентификатор чата
     /// @param text     текст сообщения
     /// @param keyboard строки кнопок
     private void send(Bot bot, long chatId, String text, List<List<Button>> keyboard) {
