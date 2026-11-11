@@ -5,14 +5,17 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Clock;
+import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.EnumMap;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import ru.urfu.echobot.model.Base;
-import ru.urfu.echobot.repository.InitialData;
+import ru.urfu.echobot.model.OpeningHours;
 
 /// Тесты правил бронирования. Текущее время зафиксировано: вторник, 20 октября 2026, 10:00 по Москве.
 final class BookingRulesTest {
@@ -23,11 +26,17 @@ final class BookingRulesTest {
     /// База «Центр»: Пн-Сб 9:00-24:00, бронь не позднее чем за 2 часа.
     private Base base;
 
-    /// Создаёт правила и берёт первую начальную базу.
+    /// Создаёт правила и тестовую базу с графиком с понедельника по субботу.
     @BeforeEach
     void setUp() {
         rules = new BookingRules(clock);
-        base = new InitialData(clock).bases().get(0);
+        Map<DayOfWeek, OpeningHours> schedule = new EnumMap<>(DayOfWeek.class);
+        for (DayOfWeek day : DayOfWeek.values()) {
+            if (day != DayOfWeek.SUNDAY) {
+                schedule.put(day, new OpeningHours(9, 24));
+            }
+        }
+        base = new Base(1, "Центр", "Ленина, 1", "Europe/Moscow", 2, "Оборудование", schedule);
     }
 
     /// Given: суббота, база работает. When: проверяем бронь. Then: можно.

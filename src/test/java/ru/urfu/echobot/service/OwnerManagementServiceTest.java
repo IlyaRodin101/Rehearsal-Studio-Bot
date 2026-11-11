@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.nio.file.Path;
 import java.time.DayOfWeek;
 import java.util.EnumMap;
 import java.util.List;
@@ -11,20 +12,24 @@ import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import ru.urfu.echobot.bot.DummyBot;
 import ru.urfu.echobot.model.Base;
 import ru.urfu.echobot.model.OpeningHours;
 import ru.urfu.echobot.model.Room;
-import ru.urfu.echobot.repository.InMemoryBaseRepository;
-import ru.urfu.echobot.repository.InMemoryRoomRepository;
+import ru.urfu.echobot.repository.SqliteBaseRepository;
+import ru.urfu.echobot.repository.SqliteDatabase;
+import ru.urfu.echobot.repository.SqliteRoomRepository;
 
 /// Tests owner access controls and configuration flows.
 final class OwnerManagementServiceTest {
     private static final long OWNER = 101;
     private static final long OTHER_OWNER = 102;
 
-    private InMemoryBaseRepository bases;
-    private InMemoryRoomRepository rooms;
+    @TempDir
+    private Path temporaryDirectory;
+    private SqliteBaseRepository bases;
+    private SqliteRoomRepository rooms;
     private OwnerManagementService service;
     private DummyBot bot;
 
@@ -32,9 +37,12 @@ final class OwnerManagementServiceTest {
     void setUp() {
         Map<DayOfWeek, OpeningHours> schedule = new EnumMap<>(DayOfWeek.class);
         schedule.put(DayOfWeek.MONDAY, new OpeningHours(9, 24));
-        bases = new InMemoryBaseRepository(List.of(new Base(1, OWNER, "Центр", "Ленина, 1",
-                "Europe/Moscow", 2, "Оборудование", schedule)));
-        rooms = new InMemoryRoomRepository(List.of(new Room(1, 1, "Зал 1", false)));
+        SqliteDatabase database = new SqliteDatabase(temporaryDirectory.resolve("bookings.db").toString());
+        bases = new SqliteBaseRepository(database);
+        rooms = new SqliteRoomRepository(database);
+        Base base = bases.save(new Base(0, OWNER, "Центр", "Ленина, 1",
+                "Europe/Moscow", 2, "Оборудование", schedule));
+        rooms.save(new Room(0, base.id(), "Зал 1", false));
         service = new OwnerManagementService(bases, rooms, Set.of(OWNER, OTHER_OWNER));
         bot = new DummyBot();
     }
@@ -44,7 +52,7 @@ final class OwnerManagementServiceTest {
         press(OWNER, "owner:add");
         type(OWNER, "Север");
         type(OWNER, "Ленина, 15");
-        type(OWNER, "Europe/Moscow");
+        press(OWNER, "owner:timezone:default");
         for (int day = 0; day < 6; day++) {
             press(OWNER, "owner:setopen:9");
             press(OWNER, "owner:setclose:24");
@@ -65,6 +73,21 @@ final class OwnerManagementServiceTest {
         assertEquals(1, rooms.findByBaseId(created.id()).size());
         assertTrue(rooms.findByBaseId(created.id()).getFirst().commentRequired());
         assertEquals("База «Север» создана.", bot.lastMessage().text());
+    }
+
+    @Test
+    void ownerCanChangeDefaultTimezoneAndInvalidInputShowsExample() {
+        press(OWNER, "owner:add");
+        type(OWNER, "Север");
+        type(OWNER, "Ленина, 15");
+        press(OWNER, "owner:timezone:change");
+
+        type(OWNER, "invalid-timezone");
+        assertEquals("Неверный формат часового пояса. Пример: Europe/Moscow.",
+                bot.lastMessage().text());
+
+        type(OWNER, "Europe/Berlin");
+        assertEquals("Пн. Час открытия:", bot.lastMessage().text());
     }
 
     @Test

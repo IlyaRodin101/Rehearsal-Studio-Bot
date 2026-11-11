@@ -3,8 +3,6 @@ package ru.urfu.echobot.service;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
-import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -38,9 +36,6 @@ public final class BookingMessageProcessingService implements MessageProcessingS
     private static final String MENU_BOOK = "menu:book";
     /// Callback для возврата в главное меню.
     private static final String MENU_HOME = "menu:home";
-    /// Формат времени начала записи в callback-кнопках раздела «Мои записи».
-    private static final DateTimeFormatter BOOKING_CALLBACK_START_FORMAT =
-            DateTimeFormatter.ofPattern("yyyyMMddHHmm");
     /// Command to return the conversation to the main menu.
     private static final String COMMAND_MENU = "/menu";
     /// Command that starts a conversation.
@@ -329,16 +324,16 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         }
         try {
             long roomId = Long.parseLong(context.parts()[2]);
-            LocalDateTime start = LocalDateTime.parse(context.parts()[3], BOOKING_CALLBACK_START_FORMAT);
             if ("cancel".equals(context.parts()[1])) {
                 informationService.confirmBookingCancellation(context.chatId(), context.userId(), roomId,
-                        start, transport);
+                        context.parts()[3], transport);
             } else if ("cancelyes".equals(context.parts()[1])) {
-                informationService.cancelBooking(context.chatId(), context.userId(), roomId, start, transport);
+                informationService.cancelBooking(context.chatId(), context.userId(), roomId, context.parts()[3],
+                        transport);
             } else {
                 send(context.chatId(), "Действие недоступно.", keyboards.backKeyboard());
             }
-        } catch (NumberFormatException | DateTimeParseException exception) {
+        } catch (NumberFormatException exception) {
             send(context.chatId(), "Действие недоступно.", keyboards.backKeyboard());
         }
     }

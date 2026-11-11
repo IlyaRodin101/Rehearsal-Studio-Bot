@@ -20,6 +20,7 @@ import ru.urfu.echobot.repository.RoomRepository;
 @SuppressWarnings({"checkstyle:MagicNumber", "checkstyle:MultipleStringLiterals", "checkstyle:ReturnCount"})
 public final class OwnerManagementService {
     private static final String BACK = "owner:back";
+    private static final String DEFAULT_TIMEZONE = "Europe/Moscow";
     private final BaseRepository baseRepository;
     private final RoomRepository roomRepository;
     private final Set<Long> ownerIds;
@@ -74,6 +75,7 @@ public final class OwnerManagementService {
                 case "add" -> beginCreate(userId, bot);
                 case "base" -> selectBase(userId, Long.parseLong(parts[2]), bot);
                 case "setting" -> showBaseMenu(userId, bot);
+                case "timezone" -> chooseTimezone(userId, parts[2], bot);
                 case "deletebase" -> confirmBaseDelete(userId, Long.parseLong(parts[2]), bot);
                 case "deletebaseyes" -> deleteBase(userId, Long.parseLong(parts[2]), bot);
                 case "edit" -> beginEdit(userId, parts[2], bot);
@@ -152,7 +154,7 @@ public final class OwnerManagementService {
                     state.day = 1;
                     promptCreateOpening(userId, bot);
                 } catch (DateTimeException exception) {
-                    send(bot, userId, "Не удалось распознать часовой пояс. Например: Europe/Moscow.",
+                    send(bot, userId, "Неверный формат часового пояса. Пример: Europe/Moscow.",
                             backKeyboard());
                 }
             }
@@ -192,8 +194,27 @@ public final class OwnerManagementService {
     }
 
     private void promptTimezone(long userId, Bot bot) {
-        state(userId).step = Step.CREATE_TIMEZONE;
-        send(bot, userId, "Введите часовой пояс базы. Например: Europe/Moscow.", backKeyboard());
+        State state = state(userId);
+        state.timezone = DEFAULT_TIMEZONE;
+        state.step = Step.IDLE;
+        send(bot, userId, "Часовой пояс по умолчанию — Europe/Moscow.",
+                choices(button("Оставить по умолчанию", "owner:timezone:default"),
+                        button("Изменить часовой пояс", "owner:timezone:change")));
+    }
+
+    private void chooseTimezone(long userId, String choice, Bot bot) {
+        State state = state(userId);
+        if ("default".equals(choice)) {
+            state.timezone = DEFAULT_TIMEZONE;
+            state.day = 1;
+            promptCreateOpening(userId, bot);
+        } else if ("change".equals(choice)) {
+            state.step = Step.CREATE_TIMEZONE;
+            send(bot, userId, "Введите название часового пояса. Пример: Europe/Moscow.",
+                    backKeyboard());
+        } else {
+            send(bot, userId, "Действие недоступно.", backKeyboard());
+        }
     }
 
     private void promptCreateOpening(long userId, Bot bot) {
@@ -643,7 +664,8 @@ public final class OwnerManagementService {
             try {
                 value = ZoneId.of(value).getId();
             } catch (DateTimeException exception) {
-                send(bot, userId, "Не удалось распознать часовой пояс. Например: Europe/Moscow.", backKeyboard());
+                send(bot, userId, "Неверный формат часового пояса. Пример: Europe/Moscow.",
+                        backKeyboard());
                 return;
             }
         } else if (state.step != Step.EDIT_EQUIPMENT && value.isEmpty()) {

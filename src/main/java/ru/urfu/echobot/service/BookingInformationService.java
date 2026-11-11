@@ -21,7 +21,7 @@ public final class BookingInformationService {
     /// Текст приглашения выбрать базу.
     private static final String SELECT_BASE = "Выберите базу:";
     /// Формат даты начала брони в callback-кнопках.
-    private static final DateTimeFormatter CALLBACK_START_FORMAT = DateTimeFormatter.ofPattern("yyyyMMddHHmm");
+    private static final DateTimeFormatter CALLBACK_START_FORMAT = DateTimeFormatter.ofPattern("uuuuMMddHHmm");
     /// Хранилище баз.
     private final BaseRepository baseRepository;
     /// Хранилище залов.
@@ -88,7 +88,7 @@ public final class BookingInformationService {
         for (UpcomingBooking item : bookings) {
             Booking booking = item.booking();
             String callback = "mine:cancel:" + booking.roomId() + ":"
-                    + booking.start().format(CALLBACK_START_FORMAT);
+                    + callbackStart(booking.start());
             keyboards.addButton(rows, keyboards.button("Отменить • " + item.base().name()
                     + " • " + item.room().name(), callback), 1);
         }
@@ -101,15 +101,16 @@ public final class BookingInformationService {
     /// @param chatId идентификатор Telegram-чата
     /// @param userId идентификатор клиента
     /// @param roomId идентификатор зала
-    /// @param start  начало записи
-    /// @param bot    бот для отправки сообщений
-    public void confirmBookingCancellation(long chatId, long userId, long roomId, LocalDateTime start, Bot bot) {
-        UpcomingBooking booking = findUpcomingBooking(userId, roomId, start);
+    /// @param startKey ключ времени начала из callback-кнопки
+    /// @param bot      бот для отправки сообщений
+    public void confirmBookingCancellation(long chatId, long userId, long roomId, String startKey, Bot bot) {
+        UpcomingBooking booking = findUpcomingBooking(userId, roomId, startKey);
         if (booking == null) {
             send(bot, chatId, "Запись не найдена или уже неактуальна.", backToBookingsKeyboard());
             return;
         }
-        String callback = "mine:cancelyes:" + roomId + ":" + start.format(CALLBACK_START_FORMAT);
+        LocalDateTime start = booking.booking().start();
+        String callback = "mine:cancelyes:" + roomId + ":" + callbackStart(start);
         send(bot, chatId, "Отменить запись в базе «" + booking.base().name() + "», зал «"
                 + booking.room().name() + "» на " + formatter.dateTime(start) + "?",
                 keyboards.choices(keyboards.button("Подтвердить отмену", callback),
@@ -121,11 +122,12 @@ public final class BookingInformationService {
     /// @param chatId идентификатор Telegram-чата
     /// @param userId идентификатор клиента
     /// @param roomId идентификатор зала
-    /// @param start  начало записи
-    /// @param bot    бот для отправки сообщений
-    public void cancelBooking(long chatId, long userId, long roomId, LocalDateTime start, Bot bot) {
-        if (findUpcomingBooking(userId, roomId, start) == null
-                || !bookingRepository.deleteByUserAndRoomAndStart(userId, roomId, start)) {
+    /// @param startKey ключ времени начала из callback-кнопки
+    /// @param bot      бот для отправки сообщений
+    public void cancelBooking(long chatId, long userId, long roomId, String startKey, Bot bot) {
+        UpcomingBooking booking = findUpcomingBooking(userId, roomId, startKey);
+        if (booking == null || !bookingRepository.deleteByUserAndRoomAndStart(userId, roomId,
+                booking.booking().start())) {
             send(bot, chatId, "Запись не найдена или уже неактуальна.", backToBookingsKeyboard());
             return;
         }
@@ -144,13 +146,17 @@ public final class BookingInformationService {
         return upcoming;
     }
 
-    private UpcomingBooking findUpcomingBooking(long userId, long roomId, LocalDateTime start) {
+    private UpcomingBooking findUpcomingBooking(long userId, long roomId, String startKey) {
         return bookingRepository.findByUser(userId).stream()
-                .filter(booking -> booking.roomId() == roomId && booking.start().equals(start))
+                .filter(booking -> booking.roomId() == roomId && callbackStart(booking.start()).equals(startKey))
                 .map(this::resolveBooking)
                 .filter(item -> item != null && rules.isUpcoming(item.base(), item.booking()))
                 .findFirst()
                 .orElse(null);
+    }
+
+    private String callbackStart(LocalDateTime start) {
+        return start.format(CALLBACK_START_FORMAT);
     }
 
     private UpcomingBooking resolveBooking(Booking booking) {
