@@ -25,7 +25,7 @@ import ru.urfu.echobot.model.Room;
 
 /// Tests SQLite persistence and atomic booking creation.
 final class SqliteRepositoriesTest {
-    private static final LocalDateTime START = LocalDateTime.of(2026, 10, 24, 18, 0);
+    private final LocalDateTime start = LocalDateTime.of(2026, 10, 24, 18, 0);
 
     @TempDir
     private Path temporaryDirectory;
@@ -49,7 +49,7 @@ final class SqliteRepositoriesTest {
         Base base = bases.save(new Base(0, 101, "Центр", "Ленина, 1", "Europe/Moscow",
                 2, "Барабаны", schedule));
         Room room = rooms.save(new Room(0, base.id(), "Зал 1", true));
-        assertTrue(bookings.addIfFree(booking(room.id(), 201, START, 2)));
+        assertTrue(bookings.addIfFree(booking(room.id(), 201, start, 2)));
 
         SqliteDatabase reopened = new SqliteDatabase(temporaryDirectory.resolve("bookings.db").toString());
 
@@ -63,12 +63,28 @@ final class SqliteRepositoriesTest {
         Base base = bases.save(new Base(0, 101, "Центр", "Ленина, 1", "Europe/Moscow",
                 2, "", Map.of()));
         Room room = rooms.save(new Room(0, base.id(), "Зал 1", false));
-        bookings.addIfFree(booking(room.id(), 201, START, 2));
+        bookings.addIfFree(booking(room.id(), 201, start, 2));
         rooms.deactivate(room.id());
 
         assertFalse(rooms.findById(room.id()).orElseThrow().active());
         assertTrue(rooms.findByBaseId(base.id()).isEmpty());
         assertEquals(1, bookings.findByUser(201).size());
+    }
+
+    @Test
+    void deletingOwnedBaseRemovesItsRoomsScheduleAndBookings() {
+        Base base = bases.save(new Base(0, 101, "Центр", "Ленина, 1", "Europe/Moscow",
+                2, "", Map.of(DayOfWeek.MONDAY, new OpeningHours(9, 24))));
+        Room room = rooms.save(new Room(0, base.id(), "Зал 1", false));
+        bookings.addIfFree(booking(room.id(), 201, start, 2));
+
+        assertFalse(bases.deleteByIdAndOwnerId(base.id(), 102));
+        assertEquals(1, bookings.findByUser(201).size());
+        assertTrue(bases.deleteByIdAndOwnerId(base.id(), 101));
+
+        assertTrue(bases.findById(base.id()).isEmpty());
+        assertTrue(rooms.findById(room.id()).isEmpty());
+        assertTrue(bookings.findByUser(201).isEmpty());
     }
 
     @Test
@@ -94,7 +110,7 @@ final class SqliteRepositoriesTest {
             throws InterruptedException {
         ready.countDown();
         start.await();
-        return bookings.addIfFree(booking(roomId, userId, START, 2));
+        return bookings.addIfFree(booking(roomId, userId, this.start, 2));
     }
 
     private Booking booking(long roomId, long userId, LocalDateTime start, int hours) {

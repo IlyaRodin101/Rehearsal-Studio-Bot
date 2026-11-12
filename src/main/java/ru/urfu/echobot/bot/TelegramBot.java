@@ -2,6 +2,7 @@ package ru.urfu.echobot.bot;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,6 +34,8 @@ public final class TelegramBot extends DefaultLongPollingUpdateConsumer implemen
     private final String token;
     /// Приложение длинного опроса Telegram.
     private final TelegramBotsLongPollingApplication application;
+    /// Защёлка, удерживающая поток запуска до остановки приложения.
+    private final CountDownLatch shutdown = new CountDownLatch(1);
 
     /// Конструктор.
     ///
@@ -45,14 +48,24 @@ public final class TelegramBot extends DefaultLongPollingUpdateConsumer implemen
         application = new TelegramBotsLongPollingApplication();
     }
 
-    /// Запускает бота.
+    /// Регистрирует бота и удерживает вызывающий поток, пока приложение не будет остановлено.
     public void start() {
         try {
             application.registerBot(token, this);
             logger.info("Telegram bot successfully started!");
-            Thread.currentThread().join();
-        } catch (Exception e) {
-            logger.error("Bot didn't get registered and didn't run.", e);
+            awaitShutdown();
+        } catch (Exception exception) {
+            logger.error("Bot didn't get registered and didn't run.", exception);
+        }
+    }
+
+    /// Ожидает остановки приложения, не блокируя сам себя через `Thread.join`.
+    private void awaitShutdown() {
+        try {
+            shutdown.await();
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            logger.info("Telegram bot was interrupted and will stop");
         }
     }
 

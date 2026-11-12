@@ -4,39 +4,70 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.nio.file.Path;
 import java.time.Clock;
+import java.time.DayOfWeek;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import ru.urfu.echobot.bot.DummyBot;
-import ru.urfu.echobot.repository.InMemoryBaseRepository;
-import ru.urfu.echobot.repository.InMemoryBookingRepository;
-import ru.urfu.echobot.repository.InMemoryRoomRepository;
-import ru.urfu.echobot.repository.InitialData;
+import ru.urfu.echobot.model.Base;
+import ru.urfu.echobot.model.Booking;
+import ru.urfu.echobot.model.OpeningHours;
+import ru.urfu.echobot.model.Room;
+import ru.urfu.echobot.repository.SqliteBaseRepository;
+import ru.urfu.echobot.repository.SqliteBookingRepository;
+import ru.urfu.echobot.repository.SqliteDatabase;
+import ru.urfu.echobot.repository.SqliteRoomRepository;
 
-/// Тесты диалогов бронирования без Telegram. Время зафиксировано: вторник, 20 октября 2026, 10:00 по Москве.
-/// В начальных данных заняты: «Центр», Зал 1, 21 октября 18:00-20:00 и «Север», Студия, 22 октября 13:00-16:00.
+/// Tests booking conversations against isolated SQLite data without Telegram.
 final class BookingMessageProcessingServiceTest {
     /// Первый клиент.
     private static final long CLIENT = 42L;
     /// Второй клиент.
     private static final long OTHER_CLIENT = 43L;
+    private static final long SERVICE_USER_ID = 0L;
 
     /// Бот-заглушка, собирающая ответы.
     private DummyBot bot;
     /// Проверяемый сервис.
     private BookingMessageProcessingService service;
+    @TempDir
+    private Path temporaryDirectory;
+    private SqliteBaseRepository baseRepository;
+    private SqliteBookingRepository bookingRepository;
+    private SqliteRoomRepository roomRepository;
 
-    /// Создаёт сервис с начальными данными и фиксированным временем перед каждым тестом.
+    /// Creates isolated SQLite repositories and fixture bases before each test.
     @BeforeEach
     void setUp() {
         Clock clock = Clock.fixed(Instant.parse("2026-10-20T07:00:00Z"), ZoneOffset.UTC);
-        InitialData data = new InitialData(clock);
-        service = new BookingMessageProcessingService(new InMemoryBaseRepository(data.bases()),
-                new InMemoryRoomRepository(data.rooms()), new InMemoryBookingRepository(data.bookings()),
+        SqliteDatabase database = new SqliteDatabase(temporaryDirectory.resolve("bookings.db").toString());
+        baseRepository = new SqliteBaseRepository(database);
+        roomRepository = new SqliteRoomRepository(database);
+        bookingRepository = new SqliteBookingRepository(database);
+        Map<DayOfWeek, OpeningHours> schedule = new EnumMap<>(DayOfWeek.class);
+        for (DayOfWeek day : DayOfWeek.values()) {
+            if (day != DayOfWeek.SUNDAY) {
+                schedule.put(day, new OpeningHours(9, 24));
+            }
+        }
+        Base center = baseRepository.save(new Base(0, 0, "Центр", "ул. Ленина, 1", "Europe/Moscow",
+                2, "Барабаны: акустическая установка", schedule));
+        Base north = baseRepository.save(new Base(0, 0, "Север", "ул. Ленина, 15", "Europe/Moscow",
+                2, "Барабаны, 2 комбоусилителя, 4 микрофона, микшерный пульт", schedule));
+        roomRepository.save(new Room(0, center.id(), "Зал 1", false));
+        roomRepository.save(new Room(0, center.id(), "Зал 2", false));
+        roomRepository.save(new Room(0, north.id(), "Зал 1", false));
+        roomRepository.save(new Room(0, north.id(), "Студия", true));
+        service = new BookingMessageProcessingService(baseRepository, roomRepository, bookingRepository,
                 new BookingRules(clock));
         bot = new DummyBot();
     }
@@ -99,11 +130,10 @@ final class BookingMessageProcessingServiceTest {
     @Test
     void ownerSeesBaseManagementAndClientActions() {
         Clock clock = Clock.fixed(Instant.parse("2026-10-20T07:00:00Z"), ZoneOffset.UTC);
-        InitialData data = new InitialData(clock);
         BookingMessageProcessingService ownerService = new BookingMessageProcessingService(
-                new InMemoryBaseRepository(data.bases()),
-                new InMemoryRoomRepository(data.rooms()),
-                new InMemoryBookingRepository(data.bookings()),
+                baseRepository,
+                roomRepository,
+                bookingRepository,
                 new BookingRules(clock), Set.of(CLIENT));
 
         ownerService.processMessage(new Message("/start", null, List.of()), CLIENT, bot);
@@ -129,6 +159,40 @@ final class BookingMessageProcessingServiceTest {
         press(CLIENT, "menu:mine");
         assertTrue(bot.messages().stream().anyMatch(m -> m.text() != null
                 && m.text().contains("Центр, Зал 1") && m.text().contains("18:00-20:00")));
+    }
+
+    /// Клиент отменяет свою будущую запись после подтверждения; другой клиент не может её отменить.
+    @Test
+    void clientCanCancelOwnBookingButNotAnotherClientsBooking() {
+        chooseSlot(CLIENT, 1, 1, "2026-10-24", 18);
+        type(CLIENT, "Анна");
+        type(CLIENT, "+7 999 123-45-67");
+        press(CLIENT, "book:skip");
+        press(CLIENT, "book:confirm");
+        press(CLIENT, "menu:mine");
+
+        assertTrue(lastButtons().contains("Отменить • Центр • Зал 1"));
+        String confirmationCallback = bot.lastMessage().keyboard().stream()
+                .flatMap(List::stream)
+                .map(Button::data)
+                .filter(data -> data.startsWith("mine:cancel:"))
+                .findFirst()
+                .orElseThrow();
+        press(CLIENT, confirmationCallback);
+        assertTrue(lastButtons().contains("Подтвердить отмену"));
+        String cancelCallback = bot.lastMessage().keyboard().stream()
+                .flatMap(List::stream)
+                .map(Button::data)
+                .filter(data -> data.startsWith("mine:cancelyes:"))
+                .findFirst()
+                .orElseThrow();
+
+        press(OTHER_CLIENT, cancelCallback);
+        assertTrue(lastText().contains("Запись не найдена"));
+        press(CLIENT, cancelCallback);
+
+        assertTrue(bot.messages().stream().anyMatch(m -> "Запись отменена.".equals(m.text())));
+        assertEquals("У вас пока нет будущих записей.", lastText());
     }
 
     /// Given: у клиента нет записей. When: открывает «Мои записи». Then: бот сообщает, что записей нет.
@@ -188,6 +252,8 @@ final class BookingMessageProcessingServiceTest {
     /// Then: 18:00 и 19:00 не предлагаются.
     @Test
     void occupiedHoursAreNotOffered() {
+        bookingRepository.addIfFree(new Booking(1, SERVICE_USER_ID, LocalDateTime.of(2026, 10, 21, 18, 0),
+                2, "Служебная запись", "+70000000000", ""));
         press(CLIENT, "menu:book");
         press(CLIENT, "book:base:1");
         press(CLIENT, "book:room:1");

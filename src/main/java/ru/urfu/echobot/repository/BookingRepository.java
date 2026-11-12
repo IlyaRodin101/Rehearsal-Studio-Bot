@@ -27,4 +27,12 @@ public interface BookingRepository {
     /// @param userId идентификатор клиента
     /// @return брони клиента, отсортированные по времени начала
     List<Booking> findByUser(long userId);
+
+    /// Удаляет бронь клиента, если она относится к указанному залу и времени.
+    ///
+    /// @param userId клиент, которому принадлежит бронь
+    /// @param roomId идентификатор зала
+    /// @param start  время начала брони
+    /// @return true, если бронь удалена
+    boolean deleteByUserAndRoomAndStart(long userId, long roomId, LocalDateTime start);
 }
