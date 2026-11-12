@@ -139,6 +139,24 @@ final class OwnerManagementServiceTest {
     }
 
     @Test
+    void ownerCanChangeCancellationRulesOfOwnBase() {
+        press(OWNER, "owner:base:1");
+        assertTrue(bot.lastMessage().keyboard().stream()
+                .flatMap(List::stream)
+                .anyMatch(button -> "Правила отмены".equals(button.text())));
+
+        press(OWNER, "owner:cancelrules");
+        assertTrue(lastText().contains("бесплатная отмена не позднее чем за 48 часов, неустойка 100%"));
+        press(OWNER, "owner:cancelhoursset:24");
+        assertEquals(24, bases.findById(1).orElseThrow().freeCancellationHours());
+
+        press(OWNER, "owner:cancelpenalty");
+        press(OWNER, "owner:cancelpenaltyset:50");
+        assertEquals(50, bases.findById(1).orElseThrow().penaltyPercent());
+        assertTrue(lastText().contains("не позднее чем за 24 часов, неустойка 50%"));
+    }
+
+    @Test
     void ownerCannotDeleteAnotherOwnersBase() {
         press(OWNER, "owner:base:1");
 
@@ -146,6 +164,10 @@ final class OwnerManagementServiceTest {
 
         assertEquals("Действие недоступно.", bot.lastMessage().text());
         assertTrue(bases.findById(1).isPresent());
+    }
+
+    private String lastText() {
+        return bot.lastMessage().text();
     }
 
     private void press(long userId, String data) {

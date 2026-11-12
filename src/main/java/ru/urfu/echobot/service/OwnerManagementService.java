@@ -43,8 +43,11 @@ public final class OwnerManagementService {
                 baseService, draftSchedule);
         OwnerBaseCreationService creation = new OwnerBaseCreationService(sessions, messaging, stateMachine,
                 baseRepository, roomRepository, baseService, draftSchedule);
+        OwnerCancellationRulesService cancellationRules = new OwnerCancellationRulesService(sessions, access,
+                messaging, baseService);
         callbackRouter = new OwnerCallbackRouter(access, baseService, creation, editing, schedule, roomService,
                 roomCreation);
+        callbackRouter.addCancellationRules(cancellationRules);
         textRouter = new OwnerTextRouter(access, sessions, stateMachine, creation, editing, roomService,
                 roomCreation);
     }

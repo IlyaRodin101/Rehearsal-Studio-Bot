@@ -134,6 +134,19 @@ final class OwnerCallbackRouter {
                 editing.selectLeadHours(callback.userId(), callback.intPart(ARGUMENT_PART), bot));
     }
 
+    /// Добавляет действия настройки правил отмены.
+    ///
+    /// @param rules сервис правил отмены
+    void addCancellationRules(OwnerCancellationRulesService rules) {
+        actions.put("cancelrules", (callback, bot) -> rules.showRules(callback.userId(), bot));
+        actions.put("cancelhours", (callback, bot) -> rules.showHours(callback.userId(), bot));
+        actions.put("cancelhoursset", (callback, bot) ->
+                rules.selectHours(callback.userId(), callback.intPart(ARGUMENT_PART), bot));
+        actions.put("cancelpenalty", (callback, bot) -> rules.showPenalty(callback.userId(), bot));
+        actions.put("cancelpenaltyset", (callback, bot) ->
+                rules.selectPenalty(callback.userId(), callback.intPart(ARGUMENT_PART), bot));
+    }
+
     /// Возвращает день недели из команды или 0 для черновика.
     ///
     /// @param callback callback-команда
