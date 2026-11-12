@@ -65,6 +65,38 @@ public final class BookingRules {
         return booking.start().atZone(zone(base)).isAfter(ZonedDateTime.now(clock.withZone(zone(base))));
     }
 
+    /// Проверяет, что отмена записи будет бесплатной.
+    ///
+    /// @param base  база, в которой находится зал
+    /// @param start время начала записи по часовому поясу базы
+    /// @return true, если до начала осталось не меньше срока бесплатной отмены
+    public boolean isFreeCancellation(@NotNull Base base, @NotNull LocalDateTime start) {
+        ZonedDateTime startAt = start.atZone(zone(base));
+        return !startAt.isBefore(freeCancellationDeadline(base));
+    }
+
+    /// Проверяет, что время стало «горячим» слотом.
+    ///
+    /// «Горячим» считается будущее время, которое начинается раньше, чем истекает
+    /// срок бесплатной отмены базы.
+    ///
+    /// @param base  база, в которой находится зал
+    /// @param start время начала по часовому поясу базы
+    /// @return true, если время начинается в будущем и попадает в срок бесплатной отмены
+    public boolean isHotSlot(@NotNull Base base, @NotNull LocalDateTime start) {
+        ZonedDateTime startAt = start.atZone(zone(base));
+        ZonedDateTime now = ZonedDateTime.now(clock.withZone(zone(base)));
+        return startAt.isAfter(now) && startAt.isBefore(freeCancellationDeadline(base));
+    }
+
+    /// Возвращает момент, до которого отмена записи бесплатна.
+    ///
+    /// @param base база с правилами отмены
+    /// @return текущее время базы плюс срок бесплатной отмены
+    public ZonedDateTime freeCancellationDeadline(@NotNull Base base) {
+        return ZonedDateTime.now(clock.withZone(zone(base))).plusHours(base.freeCancellationHours());
+    }
+
     /// Возвращает часовой пояс базы.
     ///
     /// @param base база

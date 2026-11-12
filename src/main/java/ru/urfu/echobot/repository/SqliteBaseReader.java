@@ -84,6 +84,7 @@ final class SqliteBaseReader {
         long id = rows.getLong("id");
         return new Base(id, rows.getLong("owner_id"), rows.getString("name"),
                 rows.getString("address"), rows.getString("timezone"), rows.getInt("booking_lead_hours"),
-                rows.getString("equipment"), schedule.load(connection, id));
+                rows.getString("equipment"), schedule.load(connection, id),
+                rows.getInt("free_cancellation_hours"), rows.getInt("penalty_percent"));
     }
 }

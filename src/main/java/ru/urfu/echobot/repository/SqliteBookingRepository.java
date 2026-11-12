@@ -27,8 +27,8 @@ public final class SqliteBookingRepository implements BookingRepository {
     private static final int INSERT_PHONE_PARAMETER = 7;
     /// Позиция комментария в запросе вставки брони.
     private static final int INSERT_COMMENT_PARAMETER = 8;
-    /// Позиция пользователя в запросе поиска его броней.
-    private static final int FIND_USER_PARAMETER = 1;
+    /// Позиция пользователя или зала в запросе поиска броней.
+    private static final int FIND_PARAMETER = 1;
     /// Позиция пользователя в запросе удаления брони.
     private static final int DELETE_USER_PARAMETER = 1;
     /// Позиция зала в запросе удаления брони.
@@ -94,22 +94,48 @@ public final class SqliteBookingRepository implements BookingRepository {
     /// @return брони клиента в порядке начала
     @Override
     public List<Booking> findByUser(long userId) {
+        return find("SELECT * FROM bookings WHERE user_id=? ORDER BY start_time,id", userId);
+    }
+
+    /// Возвращает все брони зала, включая прошедшие.
+    ///
+    /// @param roomId идентификатор зала
+    /// @return брони зала в порядке начала
+    @Override
+    public List<Booking> findByRoom(long roomId) {
+        return find("SELECT * FROM bookings WHERE room_id=? ORDER BY start_time,id", roomId);
+    }
+
+    /// Читает брони по запросу с одним параметром.
+    ///
+    /// @param sql       запрос выборки броней
+    /// @param parameter значение параметра
+    /// @return найденные брони
+    private List<Booking> find(String sql, long parameter) {
         try (Connection connection = database.open();
-             PreparedStatement statement = connection.prepareStatement(
-                     "SELECT * FROM bookings WHERE user_id=? ORDER BY start_time,id")) {
-            statement.setLong(FIND_USER_PARAMETER, userId);
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setLong(FIND_PARAMETER, parameter);
             try (ResultSet rows = statement.executeQuery()) {
                 List<Booking> bookings = new ArrayList<>();
                 while (rows.next()) {
-                    bookings.add(new Booking(rows.getLong("room_id"), rows.getLong("user_id"),
-                            LocalDateTime.parse(rows.getString("start_time")), rows.getInt("hours"),
-                            rows.getString("customer_name"), rows.getString("phone"), rows.getString("comment")));
+                    bookings.add(readBooking(rows));
                 }
                 return bookings;
             }
         } catch (SQLException exception) {
             throw new IllegalStateException("Не удалось прочитать брони", exception);
         }
+    }
+
+    /// Создаёт бронь из текущей строки результата.
+    ///
+    /// @param rows строка результата запроса
+    /// @return прочитанная бронь
+    /// @throws SQLException если поля брони не прочитаны
+    private Booking readBooking(ResultSet rows) throws SQLException {
+        return new Booking(rows.getLong("room_id"), rows.getLong("user_id"),
+                LocalDateTime.parse(rows.getString("start_time")), rows.getInt("hours"),
+                rows.getString("customer_name"), rows.getString("phone"), rows.getString("comment"));
     }
 
     /// Удаляет бронь пользователя в указанном зале и время.

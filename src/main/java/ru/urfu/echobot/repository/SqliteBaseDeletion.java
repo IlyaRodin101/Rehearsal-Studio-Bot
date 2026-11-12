@@ -13,6 +13,8 @@ final class SqliteBaseDeletion {
             + "(SELECT id FROM rooms WHERE base_id=?)";
     /// Запрос удаления залов базы.
     private static final String DELETE_ROOMS_SQL = "DELETE FROM rooms WHERE base_id=?";
+    /// Запрос удаления подписок на базу.
+    private static final String DELETE_SUBSCRIPTIONS_SQL = "DELETE FROM subscriptions WHERE base_id=?";
     /// Позиция базы в простых запросах.
     private static final int SINGLE_PARAMETER = 1;
     /// Позиция базы в запросах с условием по владельцу.
@@ -47,7 +49,7 @@ final class SqliteBaseDeletion {
                     connection.rollback();
                     return false;
                 }
-                for (String sql : List.of(DELETE_BOOKINGS_SQL, DELETE_ROOMS_SQL)) {
+                for (String sql : List.of(DELETE_BOOKINGS_SQL, DELETE_ROOMS_SQL, DELETE_SUBSCRIPTIONS_SQL)) {
                     deleteRelatedRows(connection, sql, id);
                 }
                 schedule.delete(connection, id);
