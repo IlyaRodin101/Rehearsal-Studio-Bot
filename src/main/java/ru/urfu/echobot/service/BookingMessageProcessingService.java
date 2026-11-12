@@ -49,13 +49,13 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         BookingTimeSelectionService timeSelection = new BookingTimeSelectionService(baseRepository,
                 roomRepository, bookingRepository, availabilityService, keyboards, formatter);
         BookingConfirmationService confirmation = new BookingConfirmationService(baseRepository,
-                roomRepository, stateMachine);
+                roomRepository, stateMachine, rules);
         BookingFormService formService = new BookingFormService(baseRepository, roomRepository,
                 bookingRepository, rules, stateMachine, confirmation);
         BookingLookup lookup = new BookingLookup(baseRepository, roomRepository, bookingRepository, rules);
         BookingInformationService informationService = new BookingInformationService(lookup, formatter);
         BookingCancellationService cancellationService = new BookingCancellationService(lookup,
-                informationService, bookingRepository, formatter);
+                informationService, bookingRepository, formatter, rules);
         BaseInformationService baseInformation = new BaseInformationService(baseRepository, formatter, keyboards);
         OwnerManagementService ownerService = new OwnerManagementService(baseRepository, roomRepository, ownerIds);
         BookingMenuController menuController = new BookingMenuController(ownerService, keyboards, stateMachine);

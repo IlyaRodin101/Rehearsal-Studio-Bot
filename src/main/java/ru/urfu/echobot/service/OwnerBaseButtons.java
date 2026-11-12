@@ -54,7 +54,8 @@ final class OwnerBaseButtons {
                 messaging.button("График работы", "owner:schedule")));
         rows.add(messaging.row(messaging.button("Залы", "owner:rooms"),
                 messaging.button("Срок бронирования", "owner:edit:lead")));
-        rows.add(messaging.row(messaging.button("Оборудование", "owner:edit:equipment")));
+        rows.add(messaging.row(messaging.button("Оборудование", "owner:edit:equipment"),
+                messaging.button("Правила отмены", "owner:cancelrules")));
         rows.add(messaging.row(messaging.button(DELETE_BASE_TEXT, DELETE_CALLBACK + base.id())));
         rows.add(messaging.row(messaging.button(OwnerMessaging.BACK_TEXT, "owner:list")));
         return rows;

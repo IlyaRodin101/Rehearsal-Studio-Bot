@@ -77,6 +77,30 @@ final class BookingRulesTest {
         assertEquals(LocalDate.of(2026, 10, 20), rules.today(base));
     }
 
+    /// Given: до начала ровно 48 часов. When: проверяем отмену. Then: она бесплатна.
+    @Test
+    void cancellationAtFreeDeadlineIsFree() {
+        assertTrue(rules.isFreeCancellation(base, LocalDateTime.of(2026, 10, 22, 10, 0)));
+        assertFalse(rules.isFreeCancellation(base, LocalDateTime.of(2026, 10, 22, 9, 0)));
+    }
+
+    /// Given: время через 24 часа. When: проверяем «горячий» слот. Then: он горячий, а ровно на границе — нет.
+    @Test
+    void hotSlotStartsBeforeFreeCancellationDeadline() {
+        assertTrue(rules.isHotSlot(base, LocalDateTime.of(2026, 10, 21, 10, 0)));
+        assertFalse(rules.isHotSlot(base, LocalDateTime.of(2026, 10, 22, 10, 0)));
+        assertFalse(rules.isHotSlot(base, LocalDateTime.of(2026, 10, 20, 9, 0)));
+    }
+
+    /// Given: у базы свой срок и неустойка. When: считаем отмену. Then: используются значения базы.
+    @Test
+    void cancellationUsesBaseRules() {
+        Base custom = base.withCancellationRules(24, 50);
+
+        assertFalse(rules.isFreeCancellation(custom, LocalDateTime.of(2026, 10, 21, 9, 0)));
+        assertTrue(rules.isHotSlot(custom, LocalDateTime.of(2026, 10, 21, 9, 0)));
+    }
+
     /**
      * Given: по UTC 19 октября 22:30, а в часовом поясе базы уже 20 октября.
      * When: запрашиваем текущую дату базы.

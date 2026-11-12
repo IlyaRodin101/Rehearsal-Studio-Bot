@@ -33,6 +33,8 @@ final class BookingMessageProcessingServiceTest {
     private static final long CLIENT = 42L;
     /// Второй клиент.
     private static final long OTHER_CLIENT = 43L;
+    /// Владелец тестовых баз.
+    private static final long OWNER = 101L;
     private static final long SERVICE_USER_ID = 0L;
 
     /// Бот-заглушка, собирающая ответы.
@@ -59,9 +61,9 @@ final class BookingMessageProcessingServiceTest {
                 schedule.put(day, new OpeningHours(9, 24));
             }
         }
-        Base center = baseRepository.save(new Base(0, 0, "Центр", "ул. Ленина, 1", "Europe/Moscow",
+        Base center = baseRepository.save(new Base(0, OWNER, "Центр", "ул. Ленина, 1", "Europe/Moscow",
                 2, "Барабаны: акустическая установка", schedule));
-        Base north = baseRepository.save(new Base(0, 0, "Север", "ул. Ленина, 15", "Europe/Moscow",
+        Base north = baseRepository.save(new Base(0, OWNER, "Север", "ул. Ленина, 15", "Europe/Moscow",
                 2, "Барабаны, 2 комбоусилителя, 4 микрофона, микшерный пульт", schedule));
         roomRepository.save(new Room(0, center.id(), "Зал 1", false));
         roomRepository.save(new Room(0, center.id(), "Зал 2", false));
@@ -179,7 +181,8 @@ final class BookingMessageProcessingServiceTest {
                 .findFirst()
                 .orElseThrow();
         press(CLIENT, confirmationCallback);
-        assertTrue(lastButtons().contains("Подтвердить отмену"));
+        assertTrue(lastButtons().contains("Да, отменить"));
+        assertTrue(lastText().contains("До начала больше 48 часов, отмена без неустойки."));
         String cancelCallback = bot.lastMessage().keyboard().stream()
                 .flatMap(List::stream)
                 .map(Button::data)
@@ -192,6 +195,8 @@ final class BookingMessageProcessingServiceTest {
         press(CLIENT, cancelCallback);
 
         assertTrue(bot.messages().stream().anyMatch(m -> "Запись отменена.".equals(m.text())));
+        assertTrue(bot.messages().stream().anyMatch(m -> m.text() != null
+                && m.text().startsWith("Клиент отменил запись бесплатно:")));
         assertEquals("У вас пока нет будущих записей.", lastText());
     }
 

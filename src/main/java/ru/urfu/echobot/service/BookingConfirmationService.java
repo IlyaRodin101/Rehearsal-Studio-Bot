@@ -1,5 +1,6 @@
 package ru.urfu.echobot.service;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 import ru.urfu.echobot.bot.Bot;
@@ -21,21 +22,35 @@ public final class BookingConfirmationService {
     private final RoomRepository roomRepository;
     /// Автомат состояний диалога.
     private final BookingStateMachine stateMachine;
+    /// Правила бесплатной и платной отмены.
+    private final BookingRules rules;
     /// Форматер дат и времени.
     private final RussianDateFormatter formatter = new RussianDateFormatter();
     /// Фабрика клавиатур.
     private final BookingKeyboardFactory keyboards = new BookingKeyboardFactory();
 
-    /// Создаёт сервис комментария и подтверждения.
+    /// Создаёт сервис комментария и подтверждения с системными часами.
     ///
     /// @param baseRepository хранилище баз
     /// @param roomRepository хранилище залов
     /// @param stateMachine   автомат состояний диалога
     public BookingConfirmationService(BaseRepository baseRepository, RoomRepository roomRepository,
                                       BookingStateMachine stateMachine) {
+        this(baseRepository, roomRepository, stateMachine, new BookingRules(Clock.systemUTC()));
+    }
+
+    /// Создаёт сервис комментария и подтверждения.
+    ///
+    /// @param baseRepository хранилище баз
+    /// @param roomRepository хранилище залов
+    /// @param stateMachine   автомат состояний диалога
+    /// @param rules          правила бесплатной и платной отмены
+    public BookingConfirmationService(BaseRepository baseRepository, RoomRepository roomRepository,
+                                      BookingStateMachine stateMachine, BookingRules rules) {
         this.baseRepository = baseRepository;
         this.roomRepository = roomRepository;
         this.stateMachine = stateMachine;
+        this.rules = rules;
     }
 
     /// Просит комментарий с учётом обязательности для выбранного зала.
@@ -105,13 +120,28 @@ public final class BookingConfirmationService {
         } else {
             LocalDateTime start = flow.bookingDate.atTime(flow.startHour, 0);
             LocalDateTime end = start.plusHours(flow.hours);
-            String text = "Проверьте:\nБаза «" + base.name() + "», " + room.name() + ", "
+            String text = cancellationWarning(base, start) + "Проверьте:\nБаза «" + base.name() + "», "
+                    + room.name() + ", "
                     + formatter.dateTime(start) + "-" + formatter.endTime(start, end) + ".\n"
                     + "Имя: " + flow.name + "\nТелефон: " + flow.phone + "\nКомментарий: "
                     + (flow.comment == null || flow.comment.isEmpty() ? "—" : flow.comment);
             send(bot, chatId, text, keyboards.choices(keyboards.button("Подтвердить", "book:confirm"),
                     keyboards.button(BACK, "back"), keyboards.button("Отмена", "book:cancel")));
         }
+    }
+
+    /// Предупреждает, что отмена брони будет платной.
+    ///
+    /// @param base  база с правилами отмены
+    /// @param start время начала записи
+    /// @return предупреждение или пустая строка, если отмена бесплатная
+    private String cancellationWarning(Base base, LocalDateTime start) {
+        if (rules.isFreeCancellation(base, start)) {
+            return "";
+        }
+        return "Это время начинается меньше чем через " + base.freeCancellationHours()
+                + " часов, поэтому отмена записи будет платной (" + base.penaltyPercent()
+                + "% стоимости).\n\n";
     }
 
     /// Отправляет текстовое сообщение с клавиатурой.

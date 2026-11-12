@@ -27,10 +27,8 @@ public final class SqliteBookingRepository implements BookingRepository {
     private static final int INSERT_PHONE_PARAMETER = 7;
     /// Позиция комментария в запросе вставки брони.
     private static final int INSERT_COMMENT_PARAMETER = 8;
-    /// Позиция пользователя или зала в запросе поиска броней.
-    private static final int FIND_PARAMETER = 1;
-    /// Позиция пользователя в запросе удаления брони.
-    private static final int DELETE_USER_PARAMETER = 1;
+    /// Позиция единственного параметра в запросах поиска и удаления.
+    private static final int SINGLE_PARAMETER = 1;
     /// Позиция зала в запросе удаления брони.
     private static final int DELETE_ROOM_PARAMETER = 2;
     /// Позиция времени начала в запросе удаления брони.
@@ -114,7 +112,7 @@ public final class SqliteBookingRepository implements BookingRepository {
     private List<Booking> find(String sql, long parameter) {
         try (Connection connection = database.open();
              PreparedStatement statement = connection.prepareStatement(sql)) {
-            statement.setLong(FIND_PARAMETER, parameter);
+            statement.setLong(SINGLE_PARAMETER, parameter);
             try (ResultSet rows = statement.executeQuery()) {
                 List<Booking> bookings = new ArrayList<>();
                 while (rows.next()) {
@@ -149,7 +147,7 @@ public final class SqliteBookingRepository implements BookingRepository {
         try (Connection connection = database.open();
              PreparedStatement statement = connection.prepareStatement(
                      "DELETE FROM bookings WHERE user_id=? AND room_id=? AND start_time=?")) {
-            statement.setLong(DELETE_USER_PARAMETER, userId);
+            statement.setLong(SINGLE_PARAMETER, userId);
             statement.setLong(DELETE_ROOM_PARAMETER, roomId);
             statement.setString(DELETE_START_PARAMETER, start.toString());
             return statement.executeUpdate() == 1;
