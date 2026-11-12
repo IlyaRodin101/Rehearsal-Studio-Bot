@@ -21,8 +21,12 @@ final class SqliteBaseWriter {
     private static final int LEAD_HOURS_PARAMETER = 5;
     /// Позиция оборудования в запросах баз.
     private static final int EQUIPMENT_PARAMETER = 6;
+    /// Позиция срока бесплатной отмены в запросах баз.
+    private static final int FREE_CANCELLATION_PARAMETER = 7;
+    /// Позиция штрафа за позднюю отмену в запросах баз.
+    private static final int PENALTY_PARAMETER = 8;
     /// Позиция идентификатора базы в запросах баз.
-    private static final int BASE_ID_PARAMETER = 7;
+    private static final int BASE_ID_PARAMETER = 9;
 
     /// База данных, через которую выполняются запросы.
     private final SqliteDatabase database;
@@ -50,7 +54,8 @@ final class SqliteBaseWriter {
                 schedule.save(connection, id, base.openingHours());
                 connection.commit();
                 return new Base(id, base.ownerId(), base.name(), base.address(), base.timezone(),
-                        base.bookingLeadHours(), base.equipment(), base.openingHours());
+                        base.bookingLeadHours(), base.equipment(), base.openingHours(),
+                        base.freeCancellationHours(), base.penaltyPercent());
             } catch (SQLException | RuntimeException exception) {
                 connection.rollback();
                 throw exception;
@@ -87,8 +92,8 @@ final class SqliteBaseWriter {
     /// @throws SQLException если база не найдена
     private void updateBaseRow(Connection connection, Base base) throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement(
-                "UPDATE bases SET owner_id=?,name=?,address=?,timezone=?,booking_lead_hours=?,equipment=? "
-                        + "WHERE id=?")) {
+                "UPDATE bases SET owner_id=?,name=?,address=?,timezone=?,booking_lead_hours=?,equipment=?,"
+                        + "free_cancellation_hours=?,penalty_percent=? WHERE id=?")) {
             bindBase(statement, base);
             statement.setLong(BASE_ID_PARAMETER, base.id());
             if (statement.executeUpdate() != 1) {
@@ -109,6 +114,8 @@ final class SqliteBaseWriter {
         statement.setString(TIMEZONE_PARAMETER, base.timezone());
         statement.setInt(LEAD_HOURS_PARAMETER, base.bookingLeadHours());
         statement.setString(EQUIPMENT_PARAMETER, base.equipment());
+        statement.setInt(FREE_CANCELLATION_PARAMETER, base.freeCancellationHours());
+        statement.setInt(PENALTY_PARAMETER, base.penaltyPercent());
     }
 
     /// Вставляет базу и возвращает её идентификатор.
@@ -119,8 +126,9 @@ final class SqliteBaseWriter {
     /// @throws SQLException если вставка не удалась
     private long insertBase(Connection connection, Base base) throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement(
-                "INSERT INTO bases(owner_id,name,address,timezone,booking_lead_hours,equipment) "
-                        + "VALUES(?,?,?,?,?,?)", Statement.RETURN_GENERATED_KEYS)) {
+                "INSERT INTO bases(owner_id,name,address,timezone,booking_lead_hours,equipment,"
+                        + "free_cancellation_hours,penalty_percent) VALUES(?,?,?,?,?,?,?,?)",
+                Statement.RETURN_GENERATED_KEYS)) {
             bindBase(statement, base);
             statement.executeUpdate();
             try (ResultSet keys = statement.getGeneratedKeys()) {

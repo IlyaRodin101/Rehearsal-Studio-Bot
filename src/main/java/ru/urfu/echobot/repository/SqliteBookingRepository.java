@@ -94,10 +94,27 @@ public final class SqliteBookingRepository implements BookingRepository {
     /// @return брони клиента в порядке начала
     @Override
     public List<Booking> findByUser(long userId) {
+        return queryBookings("SELECT * FROM bookings WHERE user_id=? ORDER BY start_time,id", userId);
+    }
+
+    /// Возвращает все брони зала, включая прошедшие.
+    ///
+    /// @param roomId идентификатор зала
+    /// @return брони зала в порядке начала
+    @Override
+    public List<Booking> findByRoom(long roomId) {
+        return queryBookings("SELECT * FROM bookings WHERE room_id=? ORDER BY start_time,id", roomId);
+    }
+
+    /// Читает брони по запросу с идентификатором пользователя или зала.
+    ///
+    /// @param sql       запрос выборки броней
+    /// @param parameter идентификатор для условия запроса
+    /// @return найденные брони
+    private List<Booking> queryBookings(String sql, long parameter) {
         try (Connection connection = database.open();
-             PreparedStatement statement = connection.prepareStatement(
-                     "SELECT * FROM bookings WHERE user_id=? ORDER BY start_time,id")) {
-            statement.setLong(FIND_USER_PARAMETER, userId);
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setLong(FIND_USER_PARAMETER, parameter);
             try (ResultSet rows = statement.executeQuery()) {
                 List<Booking> bookings = new ArrayList<>();
                 while (rows.next()) {

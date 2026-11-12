@@ -23,6 +23,10 @@ public final class BookingCallbackRouter {
     private static final String ABOUT = "about";
     /// Пространство имён записей клиента.
     private static final String MINE = "mine";
+    /// Пространство имён «горячих» слотов.
+    private static final String HOT = "hot";
+    /// Пространство имён подписок.
+    private static final String SUB = "sub";
     /// Действие возврата в главное меню.
     private static final String HOME = "home";
     /// Действие перехода к базам владельца.
@@ -82,6 +86,19 @@ public final class BookingCallbackRouter {
                 ownerService.showBaseList(context.userId(), bot));
         menuActions.put(HOME, (context, bot) ->
                 menuController.returnToMenu(context.chatId(), context.flow(), bot));
+    }
+
+    /// Подключает обработчики «горячих» слотов и подписок.
+    ///
+    /// @param hotController          контроллер «горячих» слотов
+    /// @param subscriptionController контроллер подписок
+    void registerHotSlots(HotSlotController hotController, SubscriptionController subscriptionController) {
+        namespaces.put(HOT, hotController::handle);
+        namespaces.put(SUB, subscriptionController::handle);
+        menuActions.put(HOT, (context, bot) ->
+                hotController.showBaseList(context.chatId(), context.flow(), bot));
+        menuActions.put(SUB, (context, bot) ->
+                subscriptionController.showList(context.chatId(), context.userId(), bot));
     }
 
     /// Обрабатывает callback-команду нажатой кнопки.

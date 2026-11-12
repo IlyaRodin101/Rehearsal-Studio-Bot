@@ -27,6 +27,10 @@ public final class BookingCancellationService {
     private final BookingRepository bookingRepository;
     /// Форматер дат и времени.
     private final RussianDateFormatter formatter;
+    /// Правила определения «горячих» слотов.
+    private final BookingRules rules;
+    /// Рассылка уведомлений подписчикам.
+    private final HotSlotNotifier notifier;
     /// Фабрика клавиатур.
     private final BookingKeyboardFactory keyboards = new BookingKeyboardFactory();
 
@@ -36,12 +40,17 @@ public final class BookingCancellationService {
     /// @param information       сервис списка записей
     /// @param bookingRepository хранилище броней
     /// @param formatter         форматер дат и времени
+    /// @param rules             правила бронирования
+    /// @param notifier          рассылка уведомлений подписчикам
     public BookingCancellationService(BookingLookup lookup, BookingInformationService information,
-                                      BookingRepository bookingRepository, RussianDateFormatter formatter) {
+                                      BookingRepository bookingRepository, RussianDateFormatter formatter,
+                                      BookingRules rules, HotSlotNotifier notifier) {
         this.lookup = lookup;
         this.information = information;
         this.bookingRepository = bookingRepository;
         this.formatter = formatter;
+        this.rules = rules;
+        this.notifier = notifier;
     }
 
     /// Просит клиента подтвердить отмену его будущей записи.
@@ -79,6 +88,9 @@ public final class BookingCancellationService {
             send(bot, chatId, NOT_FOUND, backToBookingsKeyboard());
         } else {
             send(bot, chatId, CANCELLED, List.of());
+            if (rules.isHotSlot(booking.base(), booking.booking().start())) {
+                notifier.notifySubscribers(booking.base(), booking.room(), booking.booking(), bot);
+            }
             information.showMyBookings(chatId, userId, bot);
         }
     }

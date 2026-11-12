@@ -118,12 +118,13 @@ final class BookingMessageProcessingServiceTest {
         return bot.lastMessage().text();
     }
 
-    /// Given: любой клиент. When: отправляет /start. Then: в меню три кнопки.
+    /// Given: любой клиент. When: отправляет /start. Then: в меню пять клиентских кнопок.
     @Test
     void startShowsMainMenuButtons() {
         type(CLIENT, "/start");
 
-        assertEquals(List.of("Забронировать", "Мои записи", "О базе"), lastButtons());
+        assertEquals(List.of("Забронировать", "Мои записи", "О базе", "Горячие слоты", "Подписка"),
+                lastButtons());
     }
 
     /// Owners retain the client menu and receive the additional base-management button.
@@ -307,7 +308,8 @@ final class BookingMessageProcessingServiceTest {
         press(CLIENT, "menu:book");
         press(CLIENT, "back");
 
-        assertEquals(List.of("Забронировать", "Мои записи", "О базе"), lastButtons());
+        assertEquals(List.of("Забронировать", "Мои записи", "О базе", "Горячие слоты", "Подписка"),
+                lastButtons());
     }
 
     /// Проверяет, что при старте в 23:00 длительность ограничена одним часом до закрытия в 24:00.

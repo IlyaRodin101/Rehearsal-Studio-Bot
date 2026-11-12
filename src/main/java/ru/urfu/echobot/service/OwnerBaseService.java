@@ -150,7 +150,8 @@ final class OwnerBaseService {
     /// @return копия базы
     Base copy(Base base, String name, String address, String timezone, int leadHours, String equipment,
               Map<DayOfWeek, OpeningHours> schedule) {
-        return new Base(base.id(), base.ownerId(), name, address, timezone, leadHours, equipment, schedule);
+        return new Base(base.id(), base.ownerId(), name, address, timezone, leadHours, equipment, schedule,
+                base.freeCancellationHours(), base.penaltyPercent());
     }
 
     /// Копирует график базы для изменения.

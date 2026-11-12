@@ -48,6 +48,26 @@ public final class BookingRules {
         return ZonedDateTime.now(clock.withZone(zone(base))).plusHours(base.bookingLeadHours());
     }
 
+    /// Возвращает момент, до которого отмена брони бесплатна.
+    ///
+    /// @param base база
+    /// @return текущее время базы плюс срок бесплатной отмены
+    public ZonedDateTime freeCancellationDeadline(@NotNull Base base) {
+        return ZonedDateTime.now(clock.withZone(zone(base))).plusHours(base.freeCancellationHours());
+    }
+
+    /// Проверяет, является ли начало брони «горячим» слотом.
+    /// Слот должен начинаться в будущем, но раньше срока бесплатной отмены базы.
+    ///
+    /// @param base  база, в которой находится зал
+    /// @param start время начала по часовому поясу базы
+    /// @return true, если время попадает в срок бесплатной отмены
+    public boolean isHotSlot(@NotNull Base base, @NotNull LocalDateTime start) {
+        ZonedDateTime now = ZonedDateTime.now(clock.withZone(zone(base)));
+        ZonedDateTime moment = start.atZone(zone(base));
+        return moment.isAfter(now) && moment.isBefore(now.plusHours(base.freeCancellationHours()));
+    }
+
     /// Возвращает сегодняшнюю дату по часовому поясу базы.
     ///
     /// @param base база
