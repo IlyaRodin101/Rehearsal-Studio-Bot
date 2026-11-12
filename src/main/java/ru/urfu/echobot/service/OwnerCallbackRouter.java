@@ -138,7 +138,7 @@ final class OwnerCallbackRouter {
     ///
     /// @param callback callback-команда
     /// @return номер дня или 0
-    private static int day(OwnerCallback callback) {
+    private int day(OwnerCallback callback) {
         return callback.size() == MINIMAL_PARTS ? 0 : callback.intPart(ARGUMENT_PART);
     }
 
@@ -146,7 +146,7 @@ final class OwnerCallbackRouter {
     ///
     /// @param callback callback-команда
     /// @return выбранный час
-    private static int hour(OwnerCallback callback) {
+    private int hour(OwnerCallback callback) {
         int index = callback.size() == ALTERNATE_HOUR_PARTS ? HOUR_ALTERNATE_PART : ARGUMENT_PART;
         return callback.intPart(index);
     }
