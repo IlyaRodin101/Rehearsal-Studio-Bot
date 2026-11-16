@@ -19,8 +19,6 @@ public final class BookingTextController {
     private final OwnerManagementService ownerService;
     /// Контроллер главного меню.
     private final BookingMenuController menuController;
-    /// Контроллер возврата.
-    private final BookingBackController backController;
     /// Форма клиента.
     private final BookingFormService formService;
     /// Сервис комментария и подтверждения.
@@ -33,16 +31,14 @@ public final class BookingTextController {
     /// Создаёт контроллер текста.
     ///
     /// @param ownerService   управление владельцами
-    /// @param menuController главное меню
-    /// @param backController возврат на предыдущий шаг
+    /// @param menuController главное меню и возврат
     /// @param formService    форма клиента
     /// @param confirmation   комментарий и подтверждение
     public BookingTextController(OwnerManagementService ownerService, BookingMenuController menuController,
-                                 BookingBackController backController, BookingFormService formService,
+                                 BookingFormService formService,
                                  BookingConfirmationService confirmation) {
         this.ownerService = ownerService;
         this.menuController = menuController;
-        this.backController = backController;
         this.formService = formService;
         this.confirmation = confirmation;
         commandHandlers = new HashMap<>();
@@ -51,7 +47,7 @@ public final class BookingTextController {
         commandHandlers.put(COMMAND_MENU, (text, bot) ->
                 menuController.returnToMenu(text.chatId(), text.flow(), bot));
         commandHandlers.put(BACK_TEXT, (text, bot) ->
-                backController.back(text.chatId(), text.flow(), bot));
+                menuController.back(text.chatId(), text.flow(), bot));
         stepHandlers = new HashMap<>();
         stepHandlers.put(BookingFlow.Step.BOOK_NAME, (text, bot) ->
                 formService.handleNameText(text.chatId(), text.flow(), text.text(), bot));

@@ -3,6 +3,7 @@ package ru.urfu.echobot.service.booking;
 import ru.urfu.echobot.service.Button;
 import ru.urfu.echobot.service.Message;
 import ru.urfu.echobot.service.GenericStateMachine;
+import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.List;
 import ru.urfu.echobot.bot.Bot;
@@ -11,6 +12,8 @@ import ru.urfu.echobot.bot.Bot;
 public final class BookingNavigationController {
     /// Позиция аргумента действия в callback-данных.
     private static final int ARGUMENT_PART = 2;
+    /// Позиция часа начала в callback-данных выбора времени.
+    private static final int HOUR_PART = 3;
     /// Callback начала бронирования.
     private static final String MENU_BOOK = "menu:book";
     /// Callback главного меню.
@@ -24,6 +27,8 @@ public final class BookingNavigationController {
     private final BookingBaseSelectionService baseSelection;
     /// Сервис выбора месяца, недели и дня.
     private final BookingDateSelectionService dateSelection;
+    /// Сервис выбора времени и длительности.
+    private final BookingTimeSelectionService timeSelection;
     /// Сервис формы клиента.
     private final BookingFormService formService;
     /// Контроллер главного меню.
@@ -39,18 +44,21 @@ public final class BookingNavigationController {
     ///
     /// @param baseSelection  выбор базы и зала
     /// @param dateSelection  выбор месяца, недели и дня
+    /// @param timeSelection  выбор времени и длительности
     /// @param formService    форма клиента
     /// @param menuController главное меню
     /// @param stateMachine   автомат состояний
     /// @param confirmation   комментарий и подтверждение
     public BookingNavigationController(BookingBaseSelectionService baseSelection,
                                        BookingDateSelectionService dateSelection,
+                                       BookingTimeSelectionService timeSelection,
                                        BookingFormService formService,
                                        BookingMenuController menuController,
                                        GenericStateMachine<BookingFlow.Step, BookingFlow.Event> stateMachine,
                                        BookingConfirmationService confirmation) {
         this.baseSelection = baseSelection;
         this.dateSelection = dateSelection;
+        this.timeSelection = timeSelection;
         this.formService = formService;
         this.menuController = menuController;
         this.stateMachine = stateMachine;
@@ -127,6 +135,67 @@ public final class BookingNavigationController {
             YearMonth month = YearMonth.parse(context.part(ARGUMENT_PART));
             flow.selectedMonth = month;
             dateSelection.showWeekChoices(context.chatId(), flow, month, bot);
+        } else {
+            menuController.returnToMenu(context.chatId(), flow, bot);
+        }
+    }
+
+    /// Выбирает неделю и открывает список дней.
+    ///
+    /// @param context callback-команда
+    /// @param bot     бот для отправки сообщений
+    public void selectWeek(BookingCallback context, Bot bot) {
+        BookingFlow flow = context.flow();
+        if (stateMachine.transition(flow, BookingFlow.Event.SELECT_WEEK)) {
+            flow.bookingDate = LocalDate.parse(context.part(ARGUMENT_PART));
+            flow.selectedWeek = flow.bookingDate;
+            dateSelection.showDayChoices(context.chatId(), flow, bot);
+        } else {
+            menuController.returnToMenu(context.chatId(), flow, bot);
+        }
+    }
+
+    /// Выбирает дату и открывает свободное время.
+    ///
+    /// @param context callback-команда
+    /// @param bot     бот для отправки сообщений
+    public void selectDay(BookingCallback context, Bot bot) {
+        BookingFlow flow = context.flow();
+        if (stateMachine.transition(flow, BookingFlow.Event.SELECT_DAY)) {
+            flow.bookingDate = LocalDate.parse(context.part(ARGUMENT_PART));
+            if (flow.selectedWeek == null) {
+                flow.selectedWeek = flow.bookingDate;
+            }
+            timeSelection.showTimeChoices(context.chatId(), flow, bot);
+        } else {
+            menuController.returnToMenu(context.chatId(), flow, bot);
+        }
+    }
+
+    /// Выбирает время начала и открывает доступную длительность.
+    ///
+    /// @param context callback-команда
+    /// @param bot     бот для отправки сообщений
+    public void selectTime(BookingCallback context, Bot bot) {
+        BookingFlow flow = context.flow();
+        if (stateMachine.transition(flow, BookingFlow.Event.SELECT_TIME)) {
+            flow.bookingDate = LocalDate.parse(context.part(ARGUMENT_PART));
+            flow.startHour = Integer.parseInt(context.part(HOUR_PART));
+            timeSelection.showDurationChoices(context.chatId(), flow, bot);
+        } else {
+            menuController.returnToMenu(context.chatId(), flow, bot);
+        }
+    }
+
+    /// Выбирает длительность и просит ввести имя клиента.
+    ///
+    /// @param context callback-команда
+    /// @param bot     бот для отправки сообщений
+    public void selectHours(BookingCallback context, Bot bot) {
+        BookingFlow flow = context.flow();
+        if (stateMachine.transition(flow, BookingFlow.Event.SELECT_DURATION)) {
+            flow.hours = Integer.parseInt(context.part(ARGUMENT_PART));
+            formService.promptName(context.chatId(), bot);
         } else {
             menuController.returnToMenu(context.chatId(), flow, bot);
         }

@@ -65,8 +65,6 @@ public final class BookingCallbackRouter {
     private final BookingNavigationController navigation;
     /// Контроллер записей клиента.
     private final BookingClientController clientController;
-    /// Контроллер возврата.
-    private final BookingBackController backController;
     /// Справочная информация о базах.
     private final BaseInformationService baseInformation;
     /// Обработчики пространств имён callback-команд.
@@ -85,20 +83,17 @@ public final class BookingCallbackRouter {
     /// Создаёт маршрутизатор callback-команд.
     ///
     /// @param ownerService     управление базами владельцев
-    /// @param menuController   главное меню
+    /// @param menuController   главное меню и возврат
     /// @param navigation       переходы бронирования
-    /// @param selection        выбор даты и времени
     /// @param clientController записи клиента
-    /// @param backController   возврат назад
     /// @param baseInformation  справочная информация
     public BookingCallbackRouter(OwnerManagementService ownerService, BookingMenuController menuController,
-                                 BookingNavigationController navigation, BookingSelectionController selection,
-                                 BookingClientController clientController, BookingBackController backController,
+                                 BookingNavigationController navigation,
+                                 BookingClientController clientController,
                                  BaseInformationService baseInformation) {
         this.ownerService = ownerService;
         this.navigation = navigation;
         this.clientController = clientController;
-        this.backController = backController;
         this.baseInformation = baseInformation;
         namespaces = new HashMap<>();
         menuActions = new HashMap<>();
@@ -106,9 +101,9 @@ public final class BookingCallbackRouter {
         bookingPartCounts = new HashMap<>();
         aboutActions = new HashMap<>();
         aboutPartCounts = new HashMap<>();
-        registerNamespaces();
+        registerNamespaces(menuController);
         registerMenuActions(menuController);
-        registerBookingActions(selection);
+        registerBookingActions();
         registerAboutActions();
     }
 
@@ -132,8 +127,10 @@ public final class BookingCallbackRouter {
     }
 
     /// Регистрирует обработчики пространств имён callback-команд.
-    private void registerNamespaces() {
-        namespaces.put(BACK, (context, bot) -> backController.back(context.chatId(), context.flow(), bot));
+    ///
+    /// @param menuController главное меню и возврат
+    private void registerNamespaces(BookingMenuController menuController) {
+        namespaces.put(BACK, (context, bot) -> menuController.back(context.chatId(), context.flow(), bot));
         namespaces.put(MENU, this::handleMenuAction);
         namespaces.put(BOOK, this::handleBooking);
         namespaces.put(ABOUT, this::handleAbout);
@@ -157,17 +154,15 @@ public final class BookingCallbackRouter {
     }
 
     /// Регистрирует действия кнопочного бронирования.
-    ///
-    /// @param selection выбор даты и времени
-    private void registerBookingActions(BookingSelectionController selection) {
+    private void registerBookingActions() {
         bookingActions.put(BASE, navigation::selectBase);
         bookingActions.put(ROOM, navigation::selectRoom);
         bookingActions.put(MONTHS, navigation::selectMonths);
         bookingActions.put(MONTH, navigation::selectMonth);
-        bookingActions.put(WEEK, selection::selectWeek);
-        bookingActions.put(DAY, selection::selectDay);
-        bookingActions.put(TIME, selection::selectTime);
-        bookingActions.put(HOURS, selection::selectHours);
+        bookingActions.put(WEEK, navigation::selectWeek);
+        bookingActions.put(DAY, navigation::selectDay);
+        bookingActions.put(TIME, navigation::selectTime);
+        bookingActions.put(HOURS, navigation::selectHours);
         bookingActions.put(SKIP, navigation::skipComment);
         bookingActions.put(CONFIRM, navigation::confirm);
         bookingActions.put(CANCEL, navigation::cancel);

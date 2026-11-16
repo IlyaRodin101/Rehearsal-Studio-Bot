@@ -66,18 +66,14 @@ public final class BookingMessageProcessingService implements MessageProcessingS
                 bookingRepository, rules);
         BaseInformationService baseInformation = new BaseInformationService(baseRepository);
         OwnerManagementService ownerService = new OwnerManagementService(baseRepository, roomRepository, ownerIds);
-        BookingMenuController menuController = new BookingMenuController(ownerService, stateMachine);
-        BookingNavigationController navigation = new BookingNavigationController(baseSelection, dateSelection,
-                formService, menuController, stateMachine, confirmation);
-        BookingSelectionController selection = new BookingSelectionController(dateSelection, timeSelection,
-                formService, menuController, stateMachine);
-        BookingClientController clientController = new BookingClientController(lookup, cancellationService);
-        BookingBackController backController = new BookingBackController(stateMachine, menuController,
+        BookingMenuController menuController = new BookingMenuController(ownerService, stateMachine,
                 baseSelection, dateSelection, timeSelection, formService, confirmation);
-        callbackRouter = new BookingCallbackRouter(ownerService, menuController, navigation, selection,
-                clientController, backController, baseInformation);
-        textController = new BookingTextController(ownerService, menuController, backController, formService,
-                confirmation);
+        BookingNavigationController navigation = new BookingNavigationController(baseSelection, dateSelection,
+                timeSelection, formService, menuController, stateMachine, confirmation);
+        BookingClientController clientController = new BookingClientController(lookup, cancellationService);
+        callbackRouter = new BookingCallbackRouter(ownerService, menuController, navigation,
+                clientController, baseInformation);
+        textController = new BookingTextController(ownerService, menuController, formService, confirmation);
     }
 
     /// Создаёт автомат переходов диалога бронирования.
