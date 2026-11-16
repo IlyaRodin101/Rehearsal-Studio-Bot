@@ -1,26 +1,32 @@
 package ru.urfu.echobot.service.booking;
 
-import ru.urfu.echobot.service.owner.OwnerManagementService;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.BiConsumer;
 import ru.urfu.echobot.bot.Bot;
+import ru.urfu.echobot.service.owner.OwnerManagementService;
 
 /// Направляет callback-команды подсистемам бронирования, владельцев и справки.
 public final class BookingCallbackRouter {
     /// Позиция действия в callback-данных.
     private static final int ACTION_PART = 1;
+    /// Позиция аргумента в callback-данных.
+    private static final int ARGUMENT_PART = 2;
     /// Минимальное число частей callback без аргумента.
     private static final int MINIMAL_PARTS = 2;
+    /// Минимальное число частей callback с одним аргументом.
+    private static final int ARGUMENT_PARTS = 3;
+    /// Минимальное число частей callback выбора времени.
+    private static final int TIME_PARTS = 4;
     /// Пространство имён владельца.
     private static final String OWNER = "owner";
     /// Пространство имён возврата.
     private static final String BACK = "back";
     /// Пространство имён главного меню.
     private static final String MENU = "menu";
-    /// Пространство имён бронирования и начало его callback.
+    /// Пространство имён и действие бронирования.
     private static final String BOOK = "book";
-    /// Пространство имён справки и начало её callback.
+    /// Пространство имён и действие справки.
     private static final String ABOUT = "about";
     /// Пространство имён записей клиента.
     private static final String MINE = "mine";
@@ -28,6 +34,30 @@ public final class BookingCallbackRouter {
     private static final String HOME = "home";
     /// Действие перехода к базам владельца.
     private static final String BASES = "bases";
+    /// Действие выбора базы.
+    private static final String BASE = "base";
+    /// Действие списка.
+    private static final String LIST = "list";
+    /// Действие выбора зала.
+    private static final String ROOM = "room";
+    /// Действие переключения страницы месяцев.
+    private static final String MONTHS = "months";
+    /// Действие выбора месяца.
+    private static final String MONTH = "month";
+    /// Действие выбора недели.
+    private static final String WEEK = "week";
+    /// Действие выбора дня.
+    private static final String DAY = "day";
+    /// Действие выбора времени.
+    private static final String TIME = "time";
+    /// Действие выбора длительности.
+    private static final String HOURS = "hours";
+    /// Действие пропуска комментария.
+    private static final String SKIP = "skip";
+    /// Действие подтверждения брони.
+    private static final String CONFIRM = "confirm";
+    /// Действие отмены.
+    private static final String CANCEL = "cancel";
 
     /// Управление базами владельцев.
     private final OwnerManagementService ownerService;
@@ -39,12 +69,18 @@ public final class BookingCallbackRouter {
     private final BookingBackController backController;
     /// Справочная информация о базах.
     private final BaseInformationService baseInformation;
-    /// Маршрутизатор действий бронирования и справки.
-    private final BookingActionRouter actionRouter;
     /// Обработчики пространств имён callback-команд.
     private final Map<String, BiConsumer<BookingCallback, Bot>> namespaces;
     /// Обработчики действий главного меню.
     private final Map<String, BiConsumer<BookingCallback, Bot>> menuActions;
+    /// Обработчики действий бронирования.
+    private final Map<String, BiConsumer<BookingCallback, Bot>> bookingActions;
+    /// Минимальная длина callback для действий бронирования.
+    private final Map<String, Integer> bookingPartCounts;
+    /// Обработчики действий раздела «О базе».
+    private final Map<String, BiConsumer<BookingCallback, Bot>> aboutActions;
+    /// Минимальная длина callback для действий раздела «О базе».
+    private final Map<String, Integer> aboutPartCounts;
 
     /// Создаёт маршрутизатор callback-команд.
     ///
@@ -64,25 +100,16 @@ public final class BookingCallbackRouter {
         this.clientController = clientController;
         this.backController = backController;
         this.baseInformation = baseInformation;
-        actionRouter = new BookingActionRouter(navigation, selection, baseInformation);
         namespaces = new HashMap<>();
         menuActions = new HashMap<>();
-        namespaces.put(BACK, (context, bot) ->
-                backController.back(context.chatId(), context.flow(), bot));
-        namespaces.put(MENU, this::handleMenuAction);
-        namespaces.put(BOOK, actionRouter::handleBooking);
-        namespaces.put(ABOUT, actionRouter::handleAbout);
-        namespaces.put(MINE, clientController::handle);
-        menuActions.put(BOOK, (context, bot) ->
-                navigation.beginBooking(context.chatId(), context.flow(), bot));
-        menuActions.put(MINE, (context, bot) ->
-                clientController.showList(context.chatId(), context.userId(), bot));
-        menuActions.put(ABOUT, (context, bot) ->
-                baseInformation.showAboutBases(context.chatId(), bot));
-        menuActions.put(BASES, (context, bot) ->
-                ownerService.showBaseList(context.userId(), bot));
-        menuActions.put(HOME, (context, bot) ->
-                menuController.returnToMenu(context.chatId(), context.flow(), bot));
+        bookingActions = new HashMap<>();
+        bookingPartCounts = new HashMap<>();
+        aboutActions = new HashMap<>();
+        aboutPartCounts = new HashMap<>();
+        registerNamespaces();
+        registerMenuActions(menuController);
+        registerBookingActions(selection);
+        registerAboutActions();
     }
 
     /// Обрабатывает callback-команду нажатой кнопки.
@@ -104,6 +131,69 @@ public final class BookingCallbackRouter {
         }
     }
 
+    /// Регистрирует обработчики пространств имён callback-команд.
+    private void registerNamespaces() {
+        namespaces.put(BACK, (context, bot) -> backController.back(context.chatId(), context.flow(), bot));
+        namespaces.put(MENU, this::handleMenuAction);
+        namespaces.put(BOOK, this::handleBooking);
+        namespaces.put(ABOUT, this::handleAbout);
+        namespaces.put(MINE, clientController::handle);
+    }
+
+    /// Регистрирует обработчики действий главного меню.
+    ///
+    /// @param menuController главное меню
+    private void registerMenuActions(BookingMenuController menuController) {
+        menuActions.put(BOOK, (context, bot) ->
+                navigation.beginBooking(context.chatId(), context.flow(), bot));
+        menuActions.put(MINE, (context, bot) ->
+                clientController.showList(context.chatId(), context.userId(), bot));
+        menuActions.put(ABOUT, (context, bot) ->
+                baseInformation.showAboutBases(context.chatId(), bot));
+        menuActions.put(BASES, (context, bot) ->
+                ownerService.showBaseList(context.userId(), bot));
+        menuActions.put(HOME, (context, bot) ->
+                menuController.returnToMenu(context.chatId(), context.flow(), bot));
+    }
+
+    /// Регистрирует действия кнопочного бронирования.
+    ///
+    /// @param selection выбор даты и времени
+    private void registerBookingActions(BookingSelectionController selection) {
+        bookingActions.put(BASE, navigation::selectBase);
+        bookingActions.put(ROOM, navigation::selectRoom);
+        bookingActions.put(MONTHS, navigation::selectMonths);
+        bookingActions.put(MONTH, navigation::selectMonth);
+        bookingActions.put(WEEK, selection::selectWeek);
+        bookingActions.put(DAY, selection::selectDay);
+        bookingActions.put(TIME, selection::selectTime);
+        bookingActions.put(HOURS, selection::selectHours);
+        bookingActions.put(SKIP, navigation::skipComment);
+        bookingActions.put(CONFIRM, navigation::confirm);
+        bookingActions.put(CANCEL, navigation::cancel);
+        bookingPartCounts.put(TIME, TIME_PARTS);
+        for (String action : bookingActions.keySet()) {
+            bookingPartCounts.putIfAbsent(action, MINIMAL_PARTS);
+        }
+        bookingPartCounts.put(BASE, ARGUMENT_PARTS);
+        bookingPartCounts.put(ROOM, ARGUMENT_PARTS);
+        bookingPartCounts.put(MONTHS, ARGUMENT_PARTS);
+        bookingPartCounts.put(MONTH, ARGUMENT_PARTS);
+        bookingPartCounts.put(WEEK, ARGUMENT_PARTS);
+        bookingPartCounts.put(DAY, ARGUMENT_PARTS);
+        bookingPartCounts.put(HOURS, ARGUMENT_PARTS);
+    }
+
+    /// Регистрирует действия раздела «О базе».
+    private void registerAboutActions() {
+        aboutActions.put(BASE, (context, bot) -> baseInformation.showBaseInformation(context.chatId(),
+                Long.parseLong(context.part(ARGUMENT_PART)), bot));
+        aboutActions.put(LIST, (context, bot) ->
+                baseInformation.showAboutBases(context.chatId(), bot));
+        aboutPartCounts.put(BASE, ARGUMENT_PARTS);
+        aboutPartCounts.put(LIST, MINIMAL_PARTS);
+    }
+
     /// Выбирает действие главного меню.
     ///
     /// @param context callback-команда
@@ -115,6 +205,38 @@ public final class BookingCallbackRouter {
         if (handler == null) {
             menuActions.get(HOME).accept(context, bot);
         } else {
+            handler.accept(context, bot);
+        }
+    }
+
+    /// Выбирает действие кнопочного бронирования.
+    ///
+    /// @param context callback-команда
+    /// @param bot     бот для отправки сообщений
+    private void handleBooking(BookingCallback context, Bot bot) {
+        execute(context, bot, bookingPartCounts, bookingActions);
+    }
+
+    /// Выбирает действие раздела «О базе».
+    ///
+    /// @param context callback-команда
+    /// @param bot     бот для отправки сообщений
+    private void handleAbout(BookingCallback context, Bot bot) {
+        execute(context, bot, aboutPartCounts, aboutActions);
+    }
+
+    /// Выполняет действие, если длина команды достаточна.
+    ///
+    /// @param context    callback-команда
+    /// @param bot        бот для отправки сообщений
+    /// @param partCounts минимальные длины команд
+    /// @param handlers   обработчики действий
+    private void execute(BookingCallback context, Bot bot, Map<String, Integer> partCounts,
+                         Map<String, BiConsumer<BookingCallback, Bot>> handlers) {
+        String action = context.action();
+        Integer requiredParts = partCounts.get(action);
+        BiConsumer<BookingCallback, Bot> handler = handlers.get(action);
+        if (requiredParts != null && context.size() >= requiredParts && handler != null) {
             handler.accept(context, bot);
         }
     }
