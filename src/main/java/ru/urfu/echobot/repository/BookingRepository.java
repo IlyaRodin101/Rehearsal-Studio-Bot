@@ -28,6 +28,12 @@ public interface BookingRepository {
     /// @return брони клиента, отсортированные по времени начала
     List<Booking> findByUser(long userId);
 
+    /// Возвращает все брони зала, в том числе уже прошедшие.
+    ///
+    /// @param roomId идентификатор зала
+    /// @return брони зала, отсортированные по времени начала
+    List<Booking> findByRoom(long roomId);
+
     /// Удаляет бронь клиента, если она относится к указанному залу и времени.
     ///
     /// @param userId клиент, которому принадлежит бронь
