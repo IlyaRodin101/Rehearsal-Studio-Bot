@@ -59,10 +59,9 @@ final class BookingMessageProcessingServiceTest {
         bookingRepository = new SqliteBookingRepository(database);
         Map<DayOfWeek, OpeningHours> schedule = new EnumMap<>(DayOfWeek.class);
         for (DayOfWeek day : DayOfWeek.values()) {
-            if (day != DayOfWeek.SUNDAY) {
-                schedule.put(day, new OpeningHours(9, 24));
-            }
+            schedule.put(day, new OpeningHours(9, 24));
         }
+        schedule.remove(DayOfWeek.SUNDAY);
         Base center = baseRepository.save(new Base(0, OWNER, "Центр", "ул. Ленина, 1", "Europe/Moscow",
                 2, "Барабаны: акустическая установка", schedule));
         Base north = baseRepository.save(new Base(0, OWNER, "Север", "ул. Ленина, 15", "Europe/Moscow",
