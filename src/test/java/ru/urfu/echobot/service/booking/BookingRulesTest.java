@@ -1,0 +1,119 @@
+package ru.urfu.echobot.service.booking;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.time.Clock;
+import java.time.DayOfWeek;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.util.EnumMap;
+import java.util.Map;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import ru.urfu.echobot.model.Base;
+import ru.urfu.echobot.model.OpeningHours;
+
+/// Тесты правил бронирования. Текущее время зафиксировано: вторник, 20 октября 2026, 10:00 по Москве.
+final class BookingRulesTest {
+    /// Фиксированные часы: 07:00 UTC, то есть 10:00 в Москве.
+    private final Clock clock = Clock.fixed(Instant.parse("2026-10-20T07:00:00Z"), ZoneOffset.UTC);
+    /// Проверяемые правила.
+    private BookingRules rules;
+    /// База «Центр»: Пн-Сб 9:00-24:00, бронь не позднее чем за 2 часа.
+    private Base base;
+
+    /// Создаёт правила и тестовую базу с графиком с понедельника по субботу.
+    @BeforeEach
+    void setUp() {
+        rules = new BookingRules(clock);
+        Map<DayOfWeek, OpeningHours> schedule = new EnumMap<>(DayOfWeek.class);
+        for (DayOfWeek day : DayOfWeek.values()) {
+            if (day != DayOfWeek.SUNDAY) {
+                schedule.put(day, new OpeningHours(9, 24));
+            }
+        }
+        base = new Base(1, "Центр", "Ленина, 1", "Europe/Moscow", 2, "Оборудование", schedule);
+    }
+
+    /// Given: суббота, база работает. When: проверяем бронь. Then: можно.
+    @Test
+    void bookingInsideWorkingHoursIsAllowed() {
+        assertTrue(rules.canBook(base, LocalDateTime.of(2026, 10, 24, 18, 0), 2));
+    }
+
+    /// Given: начало ближе допустимого срока. When: проверяем. Then: нельзя, а ровно через 2 часа можно.
+    @Test
+    void bookingCloserThanLeadTimeIsRejected() {
+        assertFalse(rules.canBook(base, LocalDateTime.of(2026, 10, 20, 11, 0), 1));
+        assertTrue(rules.canBook(base, LocalDateTime.of(2026, 10, 20, 12, 0), 1));
+    }
+
+    /// Given: бронь выходит за закрытие. When: проверяем. Then: нельзя, а до самого закрытия можно.
+    @Test
+    void bookingAfterClosingIsRejected() {
+        assertFalse(rules.canBook(base, LocalDateTime.of(2026, 10, 24, 23, 0), 2));
+        assertTrue(rules.canBook(base, LocalDateTime.of(2026, 10, 24, 22, 0), 2));
+    }
+
+    /// Given: бронь до открытия. When: проверяем. Then: нельзя.
+    @Test
+    void bookingBeforeOpeningIsRejected() {
+        assertFalse(rules.canBook(base, LocalDateTime.of(2026, 10, 24, 8, 0), 1));
+    }
+
+    /// Given: воскресенье, когда база закрыта. When: проверяем. Then: нельзя.
+    @Test
+    void bookingOnDayOffIsRejected() {
+        assertFalse(rules.canBook(base, LocalDateTime.of(2026, 10, 25, 12, 0), 1));
+    }
+
+    /// Given: фиксированное время. When: спрашиваем сегодняшнюю дату базы. Then: 20 октября.
+    @Test
+    void todayIsTakenFromClockInBaseTimezone() {
+        assertEquals(LocalDate.of(2026, 10, 20), rules.today(base));
+    }
+
+    /// Given: до начала ровно 48 часов. When: проверяем отмену. Then: она бесплатна.
+    @Test
+    void cancellationAtFreeDeadlineIsFree() {
+        assertTrue(rules.isFreeCancellation(base, LocalDateTime.of(2026, 10, 22, 10, 0)));
+        assertFalse(rules.isFreeCancellation(base, LocalDateTime.of(2026, 10, 22, 9, 0)));
+    }
+
+    /// Given: время через 24 часа. When: проверяем «горячий» слот. Then: он горячий, а ровно на границе — нет.
+    @Test
+    void hotSlotStartsBeforeFreeCancellationDeadline() {
+        assertTrue(rules.isHotSlot(base, LocalDateTime.of(2026, 10, 21, 10, 0)));
+        assertFalse(rules.isHotSlot(base, LocalDateTime.of(2026, 10, 22, 10, 0)));
+        assertFalse(rules.isHotSlot(base, LocalDateTime.of(2026, 10, 20, 9, 0)));
+    }
+
+    /// Given: у базы свой срок и неустойка. When: считаем отмену. Then: используются значения базы.
+    @Test
+    void cancellationUsesBaseRules() {
+        Base custom = base.withCancellationRules(24, 50);
+
+        assertFalse(rules.isFreeCancellation(custom, LocalDateTime.of(2026, 10, 21, 9, 0)));
+        assertTrue(rules.isHotSlot(custom, LocalDateTime.of(2026, 10, 21, 9, 0)));
+    }
+
+    /**
+     * Given: по UTC 19 октября 22:30, а в часовом поясе базы уже 20 октября.
+     * When: запрашиваем текущую дату базы.
+     * Then: возвращается 20 октября 2026 года.
+     */
+    @Test
+    void todayUsesBaseTimezoneWhenUtcDateDiffers() {
+        Clock boundaryClock = Clock.fixed(
+                Instant.parse("2026-10-19T22:30:00Z"),
+                ZoneOffset.UTC
+        );
+        BookingRules timezoneRules = new BookingRules(boundaryClock);
+
+        assertEquals(LocalDate.of(2026, 10, 20), timezoneRules.today(base));
+    }
+}
