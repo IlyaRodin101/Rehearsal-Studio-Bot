@@ -36,26 +36,21 @@ public final class BookingDateSelectionService {
     /// Правила бронирования.
     private final BookingRules rules;
     /// Фабрика клавиатур.
-    private final BookingKeyboardFactory keyboards;
+    private final BookingKeyboardFactory keyboards = new BookingKeyboardFactory();
     /// Форматер дат.
-    private final RussianDateFormatter formatter;
+    private final RussianDateFormatter formatter = new RussianDateFormatter();
 
     /// Создаёт сервис выбора даты.
     ///
     /// @param baseRepository      хранилище баз
     /// @param availabilityService проверка доступности
     /// @param rules               правила бронирования
-    /// @param keyboards           фабрика клавиатур
-    /// @param formatter           форматер дат
     public BookingDateSelectionService(BaseRepository baseRepository,
                                        BookingAvailabilityService availabilityService,
-                                       BookingRules rules, BookingKeyboardFactory keyboards,
-                                       RussianDateFormatter formatter) {
+                                       BookingRules rules) {
         this.baseRepository = baseRepository;
         this.availabilityService = availabilityService;
         this.rules = rules;
-        this.keyboards = keyboards;
-        this.formatter = formatter;
     }
 
     /// Показывает месяцы, в которых есть доступное время.

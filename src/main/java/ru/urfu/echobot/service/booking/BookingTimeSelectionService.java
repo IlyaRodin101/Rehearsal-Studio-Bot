@@ -35,9 +35,9 @@ public final class BookingTimeSelectionService {
     /// Проверка доступности времени.
     private final BookingAvailabilityService availabilityService;
     /// Фабрика клавиатур.
-    private final BookingKeyboardFactory keyboards;
+    private final BookingKeyboardFactory keyboards = new BookingKeyboardFactory();
     /// Форматер времени.
-    private final RussianDateFormatter formatter;
+    private final RussianDateFormatter formatter = new RussianDateFormatter();
 
     /// Создаёт сервис выбора времени и длительности.
     ///
@@ -45,18 +45,13 @@ public final class BookingTimeSelectionService {
     /// @param roomRepository      хранилище залов
     /// @param bookingRepository   хранилище броней
     /// @param availabilityService проверка доступности
-    /// @param keyboards           фабрика клавиатур
-    /// @param formatter           форматер времени
     public BookingTimeSelectionService(BaseRepository baseRepository, RoomRepository roomRepository,
                                        BookingRepository bookingRepository,
-                                       BookingAvailabilityService availabilityService,
-                                       BookingKeyboardFactory keyboards, RussianDateFormatter formatter) {
+                                       BookingAvailabilityService availabilityService) {
         this.baseRepository = baseRepository;
         this.roomRepository = roomRepository;
         this.bookingRepository = bookingRepository;
         this.availabilityService = availabilityService;
-        this.keyboards = keyboards;
-        this.formatter = formatter;
     }
 
     /// Показывает свободное время для выбранного дня.

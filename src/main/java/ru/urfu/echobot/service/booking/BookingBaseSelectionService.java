@@ -32,18 +32,15 @@ public final class BookingBaseSelectionService {
     /// Хранилище залов.
     private final RoomRepository roomRepository;
     /// Фабрика клавиатур.
-    private final BookingKeyboardFactory keyboards;
+    private final BookingKeyboardFactory keyboards = new BookingKeyboardFactory();
 
     /// Создаёт сервис выбора базы и зала.
     ///
     /// @param baseRepository хранилище баз
     /// @param roomRepository хранилище залов
-    /// @param keyboards      фабрика клавиатур
-    public BookingBaseSelectionService(BaseRepository baseRepository, RoomRepository roomRepository,
-                                       BookingKeyboardFactory keyboards) {
+    public BookingBaseSelectionService(BaseRepository baseRepository, RoomRepository roomRepository) {
         this.baseRepository = baseRepository;
         this.roomRepository = roomRepository;
-        this.keyboards = keyboards;
     }
 
     /// Показывает доступные для бронирования базы.

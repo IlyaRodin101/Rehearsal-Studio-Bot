@@ -27,19 +27,16 @@ public final class BookingClientController {
     /// Сервис отмены записей.
     private final BookingCancellationService cancellationService;
     /// Фабрика клавиатур.
-    private final BookingKeyboardFactory keyboards;
+    private final BookingKeyboardFactory keyboards = new BookingKeyboardFactory();
 
     /// Создаёт контроллер записей клиента.
     ///
     /// @param informationService  сведения о бронированиях
     /// @param cancellationService отмена записей
-    /// @param keyboards           фабрика клавиатур
     public BookingClientController(BookingInformationService informationService,
-                                   BookingCancellationService cancellationService,
-                                   BookingKeyboardFactory keyboards) {
+                                   BookingCancellationService cancellationService) {
         this.informationService = informationService;
         this.cancellationService = cancellationService;
-        this.keyboards = keyboards;
     }
 
     /// Показывает список будущих записей клиента.

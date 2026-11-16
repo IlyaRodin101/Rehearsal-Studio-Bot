@@ -26,20 +26,15 @@ public final class BaseInformationService {
     /// Хранилище баз.
     private final BaseRepository baseRepository;
     /// Форматер дат и времени.
-    private final RussianDateFormatter formatter;
+    private final RussianDateFormatter formatter = new RussianDateFormatter();
     /// Фабрика клавиатур.
-    private final BookingKeyboardFactory keyboards;
+    private final BookingKeyboardFactory keyboards = new BookingKeyboardFactory();
 
     /// Создаёт сервис справочной информации.
     ///
     /// @param baseRepository хранилище баз
-    /// @param formatter      форматер дат и времени
-    /// @param keyboards      фабрика клавиатур
-    public BaseInformationService(BaseRepository baseRepository, RussianDateFormatter formatter,
-                                  BookingKeyboardFactory keyboards) {
+    public BaseInformationService(BaseRepository baseRepository) {
         this.baseRepository = baseRepository;
-        this.formatter = formatter;
-        this.keyboards = keyboards;
     }
 
     /// Показывает список баз для просмотра справочной информации.

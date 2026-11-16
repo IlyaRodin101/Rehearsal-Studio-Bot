@@ -33,7 +33,7 @@ public final class BookingNavigationController {
     /// Сервис комментария и подтверждения.
     private final BookingConfirmationService confirmation;
     /// Фабрика клавиатур.
-    private final BookingKeyboardFactory keyboards;
+    private final BookingKeyboardFactory keyboards = new BookingKeyboardFactory();
 
     /// Создаёт контроллер переходов бронирования.
     ///
@@ -43,21 +43,18 @@ public final class BookingNavigationController {
     /// @param menuController главное меню
     /// @param stateMachine   автомат состояний
     /// @param confirmation   комментарий и подтверждение
-    /// @param keyboards      фабрика клавиатур
     public BookingNavigationController(BookingBaseSelectionService baseSelection,
                                        BookingDateSelectionService dateSelection,
                                        BookingFormService formService,
                                        BookingMenuController menuController,
                                        GenericStateMachine<BookingFlow.Step, BookingFlow.Event> stateMachine,
-                                       BookingConfirmationService confirmation,
-                                       BookingKeyboardFactory keyboards) {
+                                       BookingConfirmationService confirmation) {
         this.baseSelection = baseSelection;
         this.dateSelection = dateSelection;
         this.formService = formService;
         this.menuController = menuController;
         this.stateMachine = stateMachine;
         this.confirmation = confirmation;
-        this.keyboards = keyboards;
     }
 
     /// Начинает новый диалог бронирования из главного меню.

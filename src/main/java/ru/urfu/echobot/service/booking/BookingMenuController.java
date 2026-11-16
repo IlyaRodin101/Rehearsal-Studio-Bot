@@ -24,19 +24,17 @@ public final class BookingMenuController {
     /// Управляет доступом владельцев к настройкам баз.
     private final OwnerManagementService ownerService;
     /// Фабрика клавиатур.
-    private final BookingKeyboardFactory keyboards;
+    private final BookingKeyboardFactory keyboards = new BookingKeyboardFactory();
     /// Автомат состояний диалога бронирования.
     private final GenericStateMachine<BookingFlow.Step, BookingFlow.Event> stateMachine;
 
     /// Создаёт контроллер главного меню.
     ///
     /// @param ownerService управление владельцами баз
-    /// @param keyboards    фабрика клавиатур
     /// @param stateMachine автомат состояний бронирования
-    public BookingMenuController(OwnerManagementService ownerService, BookingKeyboardFactory keyboards,
+    public BookingMenuController(OwnerManagementService ownerService,
                                  GenericStateMachine<BookingFlow.Step, BookingFlow.Event> stateMachine) {
         this.ownerService = ownerService;
-        this.keyboards = keyboards;
         this.stateMachine = stateMachine;
     }
 

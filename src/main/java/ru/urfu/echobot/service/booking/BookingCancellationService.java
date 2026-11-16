@@ -32,7 +32,7 @@ public final class BookingCancellationService {
     /// Хранилище бронирований.
     private final BookingRepository bookingRepository;
     /// Форматер дат и времени.
-    private final RussianDateFormatter formatter;
+    private final RussianDateFormatter formatter = new RussianDateFormatter();
     /// Правила бесплатной и платной отмены.
     private final BookingRules rules;
     /// Уведомление владельца базы.
@@ -45,10 +45,9 @@ public final class BookingCancellationService {
     /// @param lookup            поиск будущих записей
     /// @param information       сервис списка записей
     /// @param bookingRepository хранилище броней
-    /// @param formatter         форматер дат и времени
     public BookingCancellationService(BookingLookup lookup, BookingInformationService information,
-                                      BookingRepository bookingRepository, RussianDateFormatter formatter) {
-        this(lookup, information, bookingRepository, formatter, new BookingRules(Clock.systemUTC()));
+                                      BookingRepository bookingRepository) {
+        this(lookup, information, bookingRepository, new BookingRules(Clock.systemUTC()));
     }
 
     /// Создаёт сервис отмены записей.
@@ -56,15 +55,12 @@ public final class BookingCancellationService {
     /// @param lookup            поиск будущих записей
     /// @param information       сервис списка записей
     /// @param bookingRepository хранилище броней
-    /// @param formatter         форматер дат и времени
     /// @param rules             правила бесплатной и платной отмены
     public BookingCancellationService(BookingLookup lookup, BookingInformationService information,
-                                      BookingRepository bookingRepository, RussianDateFormatter formatter,
-                                      BookingRules rules) {
+                                      BookingRepository bookingRepository, BookingRules rules) {
         this.lookup = lookup;
         this.information = information;
         this.bookingRepository = bookingRepository;
-        this.formatter = formatter;
         this.rules = rules;
         notifier = new BookingOwnerNotifier(formatter);
     }

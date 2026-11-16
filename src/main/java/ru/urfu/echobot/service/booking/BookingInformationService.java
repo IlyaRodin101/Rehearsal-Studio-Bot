@@ -26,17 +26,15 @@ public final class BookingInformationService {
     /// Поиск будущих записей.
     private final BookingLookup lookup;
     /// Форматер дат и времени.
-    private final RussianDateFormatter formatter;
+    private final RussianDateFormatter formatter = new RussianDateFormatter();
     /// Фабрика клавиатур.
     private final BookingKeyboardFactory keyboards = new BookingKeyboardFactory();
 
     /// Создаёт сервис отображения броней.
     ///
-    /// @param lookup    поиск будущих записей
-    /// @param formatter форматер дат и времени
-    public BookingInformationService(BookingLookup lookup, RussianDateFormatter formatter) {
+    /// @param lookup поиск будущих записей
+    public BookingInformationService(BookingLookup lookup) {
         this.lookup = lookup;
-        this.formatter = formatter;
     }
 
     /// Возвращает текст со списком будущих записей клиента.

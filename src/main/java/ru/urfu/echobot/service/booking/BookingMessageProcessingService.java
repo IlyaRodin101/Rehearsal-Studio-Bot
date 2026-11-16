@@ -1,7 +1,11 @@
 package ru.urfu.echobot.service.booking;
 
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import org.jetbrains.annotations.NotNull;
 import ru.urfu.echobot.service.GenericStateMachine;
 import ru.urfu.echobot.service.Message;
@@ -12,10 +16,13 @@ import ru.urfu.echobot.repository.BaseRepository;
 import ru.urfu.echobot.repository.BookingRepository;
 import ru.urfu.echobot.repository.RoomRepository;
 
-/// Принимает сообщения Telegram и передаёт их контроллерам диалогов.
+/// Принимает сообщения Telegram, хранит диалоги пользователей и передаёт их контроллерам.
 public final class BookingMessageProcessingService implements MessageProcessingService {
-    /// Диалоги всех пользователей.
-    private final BookingSessionRegistry sessions;
+    /// Через сколько минут неактивности диалог сбрасывается.
+    private static final long SESSION_TIMEOUT_MINUTES = 5;
+
+    /// Состояния диалогов, индексированные по идентификатору пользователя.
+    private final Map<Long, BookingFlow> flows = new ConcurrentHashMap<>();
     /// Маршрутизатор callback-команд.
     private final BookingCallbackRouter callbackRouter;
     /// Обработчик текстовых сообщений.
@@ -44,35 +51,31 @@ public final class BookingMessageProcessingService implements MessageProcessingS
                                            Set<Long> ownerIds) {
         BookingAvailabilityService availabilityService = new BookingAvailabilityService(roomRepository,
                 bookingRepository, rules);
-        RussianDateFormatter formatter = new RussianDateFormatter();
-        BookingKeyboardFactory keyboards = new BookingKeyboardFactory();
         GenericStateMachine<BookingFlow.Step, BookingFlow.Event> stateMachine = createStateMachine();
-        BookingBaseSelectionService baseSelection = new BookingBaseSelectionService(baseRepository,
-                roomRepository, keyboards);
+        BookingBaseSelectionService baseSelection = new BookingBaseSelectionService(baseRepository, roomRepository);
         BookingDateSelectionService dateSelection = new BookingDateSelectionService(baseRepository,
-                availabilityService, rules, keyboards, formatter);
+                availabilityService, rules);
         BookingTimeSelectionService timeSelection = new BookingTimeSelectionService(baseRepository,
-                roomRepository, bookingRepository, availabilityService, keyboards, formatter);
+                roomRepository, bookingRepository, availabilityService);
         BookingConfirmationService confirmation = new BookingConfirmationService(baseRepository,
                 roomRepository, stateMachine, rules);
         BookingFormService formService = new BookingFormService(baseRepository, roomRepository,
                 bookingRepository, rules, stateMachine, confirmation);
         BookingLookup lookup = new BookingLookup(baseRepository, roomRepository, bookingRepository, rules);
-        BookingInformationService informationService = new BookingInformationService(lookup, formatter);
+        BookingInformationService informationService = new BookingInformationService(lookup);
         BookingCancellationService cancellationService = new BookingCancellationService(lookup,
-                informationService, bookingRepository, formatter, rules);
-        BaseInformationService baseInformation = new BaseInformationService(baseRepository, formatter, keyboards);
+                informationService, bookingRepository, rules);
+        BaseInformationService baseInformation = new BaseInformationService(baseRepository);
         OwnerManagementService ownerService = new OwnerManagementService(baseRepository, roomRepository, ownerIds);
-        BookingMenuController menuController = new BookingMenuController(ownerService, keyboards, stateMachine);
+        BookingMenuController menuController = new BookingMenuController(ownerService, stateMachine);
         BookingNavigationController navigation = new BookingNavigationController(baseSelection, dateSelection,
-                formService, menuController, stateMachine, confirmation, keyboards);
+                formService, menuController, stateMachine, confirmation);
         BookingSelectionController selection = new BookingSelectionController(dateSelection, timeSelection,
                 formService, menuController, stateMachine);
         BookingClientController clientController = new BookingClientController(informationService,
-                cancellationService, keyboards);
+                cancellationService);
         BookingBackController backController = new BookingBackController(stateMachine, menuController,
                 baseSelection, dateSelection, timeSelection, formService, confirmation);
-        sessions = new BookingSessionRegistry();
         callbackRouter = new BookingCallbackRouter(ownerService, menuController, navigation, selection,
                 clientController, backController, baseInformation);
         textController = new BookingTextController(ownerService, menuController, backController, formService,
@@ -133,12 +136,35 @@ public final class BookingMessageProcessingService implements MessageProcessingS
     /// @param bot    бот для отправки ответов
     @Override
     public void processMessage(@NotNull Message msg, long chatId, @NotNull Bot bot) {
-        sessions.removeExpired();
-        BookingFlow flow = sessions.flow(chatId);
+        removeExpiredFlows();
+        BookingFlow flow = flow(chatId);
         if (msg.buttonData() != null) {
             callbackRouter.handle(msg.buttonData(), chatId, flow, bot);
         } else if (msg.text() != null) {
             textController.handle(msg.text(), chatId, flow, bot);
+        }
+    }
+
+    /// Возвращает диалог пользователя, создавая его при первом обращении.
+    ///
+    /// @param userId идентификатор пользователя
+    /// @return состояние диалога
+    private BookingFlow flow(long userId) {
+        BookingFlow flow = flows.computeIfAbsent(userId, ignored -> new BookingFlow());
+        flow.updateLastActivity();
+        return flow;
+    }
+
+    /// Удаляет диалоги, в которых не было активности дольше тайм-аута.
+    private void removeExpiredFlows() {
+        Iterator<Map.Entry<Long, BookingFlow>> iterator = flows.entrySet().iterator();
+        LocalDateTime currentTime = LocalDateTime.now();
+        while (iterator.hasNext()) {
+            BookingFlow flow = iterator.next().getValue();
+            long inactiveMinutes = ChronoUnit.MINUTES.between(flow.getLastActivityAt(), currentTime);
+            if (inactiveMinutes >= SESSION_TIMEOUT_MINUTES) {
+                iterator.remove();
+            }
         }
     }
 }
