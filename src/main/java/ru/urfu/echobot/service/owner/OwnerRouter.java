@@ -5,8 +5,8 @@ import java.util.Map;
 import java.util.function.BiConsumer;
 import ru.urfu.echobot.bot.Bot;
 
-/// Направляет callback-команды владельца профильным сервисам настройки.
-final class OwnerCallbackRouter {
+/// Направляет callback-команды и текст владельца профильным сервисам настройки.
+final class OwnerRouter {
     /// Позиция идентификатора аргумента.
     private static final int ARGUMENT_PART = 2;
     /// Позиция часа в командах с дополнительным индексом.
@@ -32,8 +32,10 @@ final class OwnerCallbackRouter {
     private final OwnerDraftScheduleService draftSchedule;
     /// Обработчики действий.
     private final Map<String, BiConsumer<OwnerCallback, Bot>> actions;
+    /// Обработчики текста по шагам.
+    private final Map<OwnerSession.Step, BiConsumer<OwnerText, Bot>> textHandlers;
 
-    /// Создаёт маршрутизатор команд владельца.
+    /// Создаёт маршрутизатор сообщений владельца.
     ///
     /// @param access        проверка прав
     /// @param baseService   основные операции с базами
@@ -42,10 +44,10 @@ final class OwnerCallbackRouter {
     /// @param schedule      график работы
     /// @param roomService   залы существующей базы
     /// @param draftSchedule черновик новой базы
-    OwnerCallbackRouter(OwnerAccess access, OwnerBaseService baseService,
-                        OwnerBaseCreationService baseCreation, OwnerBaseEditingService editing,
-                        OwnerScheduleService schedule, OwnerRoomService roomService,
-                        OwnerDraftScheduleService draftSchedule) {
+    OwnerRouter(OwnerAccess access, OwnerBaseService baseService,
+                OwnerBaseCreationService baseCreation, OwnerBaseEditingService editing,
+                OwnerScheduleService schedule, OwnerRoomService roomService,
+                OwnerDraftScheduleService draftSchedule) {
         this.access = access;
         this.baseService = baseService;
         this.baseCreation = baseCreation;
@@ -54,7 +56,9 @@ final class OwnerCallbackRouter {
         this.roomService = roomService;
         this.draftSchedule = draftSchedule;
         actions = new HashMap<>();
+        textHandlers = new HashMap<>();
         registerActions();
+        registerTextHandlers();
     }
 
     /// Выполняет callback-команду владельца.
@@ -62,10 +66,33 @@ final class OwnerCallbackRouter {
     /// @param userId идентификатор владельца
     /// @param parts  части callback-команды
     /// @param bot    бот для отправки
-    void handle(long userId, String[] parts, Bot bot) {
+    void handleCallback(long userId, String[] parts, Bot bot) {
         if (access.requireOwner(userId, bot) && parts.length >= MINIMAL_PARTS) {
             execute(new OwnerCallback(userId, parts), bot);
         }
+    }
+
+    /// Обрабатывает текст владельца, если у него есть активная форма.
+    ///
+    /// @param userId  идентификатор владельца
+    /// @param session активная сессия владельца
+    /// @param text    введённый текст
+    /// @param bot     бот для отправки
+    /// @return true, если текст обработан формой владельца
+    boolean handleText(long userId, OwnerSession session, String text, Bot bot) {
+        if (session.step == OwnerSession.Step.IDLE) {
+            return false;
+        }
+        if (!access.requireOwner(userId, bot)) {
+            session.reset();
+            return true;
+        }
+        BiConsumer<OwnerText, Bot> handler = textHandlers.get(session.step);
+        if (handler == null) {
+            return false;
+        }
+        handler.accept(new OwnerText(userId, text), bot);
+        return true;
     }
 
     /// Находит и выполняет обработчик действия.
@@ -131,6 +158,32 @@ final class OwnerCallbackRouter {
                 editing.selectLeadHours(callback.userId(), callback.intPart(ARGUMENT_PART), bot));
     }
 
+    /// Заполняет обработчики текста по шагам формы.
+    private void registerTextHandlers() {
+        textHandlers.put(OwnerSession.Step.CREATE_NAME, (text, bot) ->
+                baseCreation.handleName(text.userId(), text.value(), bot));
+        textHandlers.put(OwnerSession.Step.CREATE_ADDRESS, (text, bot) ->
+                baseCreation.handleAddress(text.userId(), text.value(), bot));
+        textHandlers.put(OwnerSession.Step.CREATE_TIMEZONE, (text, bot) ->
+                baseCreation.handleTimezone(text.userId(), text.value(), bot));
+        textHandlers.put(OwnerSession.Step.CREATE_ROOM_NAME, (text, bot) ->
+                draftSchedule.handleRoomName(text.userId(), text.value(), bot));
+        textHandlers.put(OwnerSession.Step.CREATE_EQUIPMENT, (text, bot) ->
+                baseCreation.handleEquipment(text.userId(), text.value(), bot));
+        textHandlers.put(OwnerSession.Step.ROOM_CREATE_NAME, (text, bot) ->
+                roomService.handleRoomName(text.userId(), text.value(), bot));
+        textHandlers.put(OwnerSession.Step.EDIT_NAME, (text, bot) ->
+                editing.handleEditText(text.userId(), text.value(), bot));
+        textHandlers.put(OwnerSession.Step.EDIT_ADDRESS, (text, bot) ->
+                editing.handleEditText(text.userId(), text.value(), bot));
+        textHandlers.put(OwnerSession.Step.EDIT_TIMEZONE, (text, bot) ->
+                editing.handleEditText(text.userId(), text.value(), bot));
+        textHandlers.put(OwnerSession.Step.EDIT_EQUIPMENT, (text, bot) ->
+                editing.handleEditText(text.userId(), text.value(), bot));
+        textHandlers.put(OwnerSession.Step.ROOM_EDIT_NAME, (text, bot) ->
+                editing.handleEditText(text.userId(), text.value(), bot));
+    }
+
     /// Добавляет действия настройки правил отмены.
     ///
     /// @param rules сервис правил отмены
@@ -191,5 +244,12 @@ final class OwnerCallbackRouter {
         long longPart(int index) {
             return Long.parseLong(parts[index]);
         }
+    }
+
+    /// Данные текстового сообщения владельца.
+    ///
+    /// @param userId идентификатор владельца
+    /// @param value  введённый текст
+    private record OwnerText(long userId, String value) {
     }
 }

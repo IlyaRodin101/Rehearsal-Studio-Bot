@@ -15,10 +15,8 @@ public final class OwnerManagementService {
     private final OwnerSessions sessions;
     /// Основные операции с базами.
     private final OwnerBaseService baseService;
-    /// Маршрутизатор callback-команд.
-    private final OwnerCallbackRouter callbackRouter;
-    /// Маршрутизатор текстовых сообщений.
-    private final OwnerTextRouter textRouter;
+    /// Маршрутизатор сообщений владельца.
+    private final OwnerRouter router;
 
     /// Создаёт сервис управления базами владельцев.
     ///
@@ -44,11 +42,8 @@ public final class OwnerManagementService {
                 baseRepository, roomRepository, baseService, draftSchedule);
         OwnerCancellationRulesService cancellationRules = new OwnerCancellationRulesService(sessions, access,
                 messaging, baseService);
-        callbackRouter = new OwnerCallbackRouter(access, baseService, creation, editing, schedule, roomService,
-                draftSchedule);
-        callbackRouter.addCancellationRules(cancellationRules);
-        textRouter = new OwnerTextRouter(access, sessions, stateMachine, creation, editing, roomService,
-                draftSchedule);
+        router = new OwnerRouter(access, baseService, creation, editing, schedule, roomService, draftSchedule);
+        router.addCancellationRules(cancellationRules);
     }
 
     /// Создаёт автомат переходов настройки баз владельцем.
@@ -142,7 +137,7 @@ public final class OwnerManagementService {
     /// @param bot    бот для отправки
     /// @return true, если команда обработана или отклонена
     public boolean handleCallback(long userId, String[] parts, Bot bot) {
-        callbackRouter.handle(userId, parts, bot);
+        router.handleCallback(userId, parts, bot);
         return true;
     }
 
@@ -153,6 +148,7 @@ public final class OwnerManagementService {
     /// @param bot    бот для отправки
     /// @return true, если текст относился к форме владельца
     public boolean handleText(long userId, String text, Bot bot) {
-        return textRouter.handle(userId, text, bot);
+        OwnerSession session = sessions.existing(userId);
+        return session != null && router.handleText(userId, session, text, bot);
     }
 }
