@@ -62,9 +62,8 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         BookingFormService formService = new BookingFormService(baseRepository, roomRepository,
                 bookingRepository, rules, stateMachine, confirmation);
         BookingLookup lookup = new BookingLookup(baseRepository, roomRepository, bookingRepository, rules);
-        BookingInformationService informationService = new BookingInformationService(lookup);
         BookingCancellationService cancellationService = new BookingCancellationService(lookup,
-                informationService, bookingRepository, rules);
+                bookingRepository, rules);
         BaseInformationService baseInformation = new BaseInformationService(baseRepository);
         OwnerManagementService ownerService = new OwnerManagementService(baseRepository, roomRepository, ownerIds);
         BookingMenuController menuController = new BookingMenuController(ownerService, stateMachine);
@@ -72,8 +71,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
                 formService, menuController, stateMachine, confirmation);
         BookingSelectionController selection = new BookingSelectionController(dateSelection, timeSelection,
                 formService, menuController, stateMachine);
-        BookingClientController clientController = new BookingClientController(informationService,
-                cancellationService);
+        BookingClientController clientController = new BookingClientController(lookup, cancellationService);
         BookingBackController backController = new BookingBackController(stateMachine, menuController,
                 baseSelection, dateSelection, timeSelection, formService, confirmation);
         callbackRouter = new BookingCallbackRouter(ownerService, menuController, navigation, selection,

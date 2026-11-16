@@ -1,16 +1,17 @@
 package ru.urfu.echobot.service.booking;
 
-import ru.urfu.echobot.service.Button;
-import ru.urfu.echobot.service.Message;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 import ru.urfu.echobot.bot.Bot;
 import ru.urfu.echobot.model.Base;
+import ru.urfu.echobot.model.Booking;
 import ru.urfu.echobot.repository.BookingRepository;
+import ru.urfu.echobot.service.Button;
+import ru.urfu.echobot.service.Message;
 import ru.urfu.echobot.service.booking.BookingLookup.UpcomingBooking;
 
-/// Подтверждает и выполняет отмену будущих записей клиента.
+/// Подтверждает и выполняет отмену будущих записей клиента и уведомляет владельца базы.
 public final class BookingCancellationService {
     /// Сообщение об устаревшей записи.
     private static final String NOT_FOUND = "Запись не найдена или уже неактуальна.";
@@ -24,45 +25,40 @@ public final class BookingCancellationService {
     private static final String CANCELLED = "Запись отменена.";
     /// Сообщение о снова доступном времени.
     private static final String TIME_IS_FREE = "Время снова доступно для брони.";
+    /// Окончание строки уведомления владельцу.
+    private static final String LINE_END = ".\n";
+    /// Закрывающая кавычка названия базы с разделителем.
+    private static final String BASE_CLOSE = "», ";
 
     /// Поиск будущих записей.
     private final BookingLookup lookup;
-    /// Сервис списка записей.
-    private final BookingInformationService information;
     /// Хранилище бронирований.
     private final BookingRepository bookingRepository;
     /// Форматер дат и времени.
     private final RussianDateFormatter formatter = new RussianDateFormatter();
     /// Правила бесплатной и платной отмены.
     private final BookingRules rules;
-    /// Уведомление владельца базы.
-    private final BookingOwnerNotifier notifier;
     /// Фабрика клавиатур.
     private final BookingKeyboardFactory keyboards = new BookingKeyboardFactory();
 
     /// Создаёт сервис отмены с системными часами.
     ///
     /// @param lookup            поиск будущих записей
-    /// @param information       сервис списка записей
     /// @param bookingRepository хранилище броней
-    public BookingCancellationService(BookingLookup lookup, BookingInformationService information,
-                                      BookingRepository bookingRepository) {
-        this(lookup, information, bookingRepository, new BookingRules(Clock.systemUTC()));
+    public BookingCancellationService(BookingLookup lookup, BookingRepository bookingRepository) {
+        this(lookup, bookingRepository, new BookingRules(Clock.systemUTC()));
     }
 
     /// Создаёт сервис отмены записей.
     ///
     /// @param lookup            поиск будущих записей
-    /// @param information       сервис списка записей
     /// @param bookingRepository хранилище броней
     /// @param rules             правила бесплатной и платной отмены
-    public BookingCancellationService(BookingLookup lookup, BookingInformationService information,
-                                      BookingRepository bookingRepository, BookingRules rules) {
+    public BookingCancellationService(BookingLookup lookup, BookingRepository bookingRepository,
+                                      BookingRules rules) {
         this.lookup = lookup;
-        this.information = information;
         this.bookingRepository = bookingRepository;
         this.rules = rules;
-        notifier = new BookingOwnerNotifier(formatter);
     }
 
     /// Просит клиента подтвердить отмену его будущей записи.
@@ -92,20 +88,21 @@ public final class BookingCancellationService {
     /// @param roomId   идентификатор зала
     /// @param startKey ключ времени начала из callback-кнопки
     /// @param bot      бот для отправки сообщений
-    public void cancelBooking(long chatId, long userId, long roomId, String startKey, Bot bot) {
+    /// @return true, если запись удалена
+    public boolean cancelBooking(long chatId, long userId, long roomId, String startKey, Bot bot) {
         UpcomingBooking booking = lookup.find(userId, roomId, startKey);
         if (booking == null || !bookingRepository.deleteByUserAndRoomAndStart(userId, roomId,
                 booking.booking().start())) {
             send(bot, chatId, NOT_FOUND, backToBookingsKeyboard());
-        } else {
-            boolean free = rules.isFreeCancellation(booking.base(), booking.booking().start());
-            send(bot, chatId, CANCELLED, List.of());
-            if (free) {
-                send(bot, chatId, TIME_IS_FREE, List.of());
-            }
-            notifier.notifyCancellation(booking, free, bot);
-            information.showMyBookings(chatId, userId, bot);
+            return false;
         }
+        boolean free = rules.isFreeCancellation(booking.base(), booking.booking().start());
+        send(bot, chatId, CANCELLED, List.of());
+        if (free) {
+            send(bot, chatId, TIME_IS_FREE, List.of());
+        }
+        notifyOwner(booking, free, bot);
+        return true;
     }
 
     /// Собирает текст подтверждения с предупреждением о неустойке.
@@ -119,10 +116,30 @@ public final class BookingCancellationService {
                 ? "До начала больше " + base.freeCancellationHours() + " часов, отмена без неустойки."
                 : "До начала меньше " + base.freeCancellationHours() + " часов, отмена платная ("
                         + base.penaltyPercent() + "% стоимости).";
-        return "Запись: база «" + base.name() + "», " + item.room().name() + ", "
+        return "Запись: база «" + base.name() + BASE_CLOSE + item.room().name() + ", "
                 + formatter.dateTime(start) + "-"
-                + formatter.endTime(start, item.booking().end()) + ".\n"
+                + formatter.endTime(start, item.booking().end()) + LINE_END
                 + rule + "\nОтменить?";
+    }
+
+    /// Отправляет владельцу сведения об отменённой записи.
+    ///
+    /// @param item отменённая запись с базой и залом
+    /// @param free true, если отмена бесплатная
+    /// @param bot  бот для отправки сообщения
+    private void notifyOwner(UpcomingBooking item, boolean free, Bot bot) {
+        Booking booking = item.booking();
+        String status = free
+                ? "бесплатно"
+                : "с неустойкой " + item.base().penaltyPercent() + "%";
+        String comment = booking.comment().isEmpty() ? "—" : booking.comment();
+        String text = "Клиент отменил запись " + status + ":\n"
+                + "База «" + item.base().name() + BASE_CLOSE + item.room().name() + ", "
+                + formatter.dateTime(booking.start()) + "-"
+                + formatter.endTime(booking.start(), booking.end()) + LINE_END
+                + "Клиент: " + booking.customerName() + ", " + booking.phone() + LINE_END
+                + "Комментарий: " + comment;
+        bot.sendMessage(new Message(text, null, List.of()), item.base().ownerId());
     }
 
     /// Возвращает клавиатуру возврата к списку записей.
