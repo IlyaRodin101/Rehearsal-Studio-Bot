@@ -28,31 +28,31 @@ final class OwnerCallbackRouter {
     private final OwnerScheduleService schedule;
     /// Залы существующей базы.
     private final OwnerRoomService roomService;
-    /// Залы новой базы.
-    private final OwnerRoomCreationService roomCreation;
+    /// Черновик новой базы.
+    private final OwnerDraftScheduleService draftSchedule;
     /// Обработчики действий.
     private final Map<String, BiConsumer<OwnerCallback, Bot>> actions;
 
     /// Создаёт маршрутизатор команд владельца.
     ///
-    /// @param access       проверка прав
-    /// @param baseService  основные операции с базами
-    /// @param baseCreation создание базы
-    /// @param editing      редактирование базы
-    /// @param schedule     график работы
-    /// @param roomService  залы существующей базы
-    /// @param roomCreation залы новой базы
+    /// @param access        проверка прав
+    /// @param baseService   основные операции с базами
+    /// @param baseCreation  создание базы
+    /// @param editing       редактирование базы
+    /// @param schedule      график работы
+    /// @param roomService   залы существующей базы
+    /// @param draftSchedule черновик новой базы
     OwnerCallbackRouter(OwnerAccess access, OwnerBaseService baseService,
                         OwnerBaseCreationService baseCreation, OwnerBaseEditingService editing,
                         OwnerScheduleService schedule, OwnerRoomService roomService,
-                        OwnerRoomCreationService roomCreation) {
+                        OwnerDraftScheduleService draftSchedule) {
         this.access = access;
         this.baseService = baseService;
         this.baseCreation = baseCreation;
         this.editing = editing;
         this.schedule = schedule;
         this.roomService = roomService;
-        this.roomCreation = roomCreation;
+        this.draftSchedule = draftSchedule;
         actions = new HashMap<>();
         registerActions();
     }
@@ -126,7 +126,7 @@ final class OwnerCallbackRouter {
         actions.put("newrequired", (callback, bot) ->
                 roomService.setNewRoomRequirement(callback.userId(), callback.part(ARGUMENT_PART), bot));
         actions.put("newroom", (callback, bot) ->
-                roomCreation.addAnotherRoom(callback.userId(), callback.part(ARGUMENT_PART), bot));
+                draftSchedule.addAnotherRoom(callback.userId(), callback.part(ARGUMENT_PART), bot));
         actions.put("lead", (callback, bot) ->
                 editing.selectLeadHours(callback.userId(), callback.intPart(ARGUMENT_PART), bot));
     }

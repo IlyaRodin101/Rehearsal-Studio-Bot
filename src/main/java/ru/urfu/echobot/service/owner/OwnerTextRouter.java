@@ -20,31 +20,31 @@ final class OwnerTextRouter {
     private final OwnerBaseEditingService editing;
     /// Залы существующей базы.
     private final OwnerRoomService roomService;
-    /// Залы новой базы.
-    private final OwnerRoomCreationService roomCreation;
+    /// Черновик новой базы.
+    private final OwnerDraftScheduleService draftSchedule;
     /// Обработчики текста по шагам.
     private final Map<OwnerSession.Step, BiConsumer<OwnerText, Bot>> handlers;
 
     /// Создаёт маршрутизатор текста владельца.
     ///
-    /// @param access       проверка прав
-    /// @param sessions     сессии владельцев
-    /// @param stateMachine автомат состояний
-    /// @param baseCreation создание базы
-    /// @param editing      редактирование базы
-    /// @param roomService  залы существующей базы
-    /// @param roomCreation залы новой базы
+    /// @param access        проверка прав
+    /// @param sessions      сессии владельцев
+    /// @param stateMachine  автомат состояний
+    /// @param baseCreation  создание базы
+    /// @param editing       редактирование базы
+    /// @param roomService   залы существующей базы
+    /// @param draftSchedule черновик новой базы
     OwnerTextRouter(OwnerAccess access, OwnerSessions sessions,
                     GenericStateMachine<OwnerSession.Step, OwnerSession.Event> stateMachine,
                     OwnerBaseCreationService baseCreation, OwnerBaseEditingService editing,
-                    OwnerRoomService roomService, OwnerRoomCreationService roomCreation) {
+                    OwnerRoomService roomService, OwnerDraftScheduleService draftSchedule) {
         this.access = access;
         this.sessions = sessions;
         this.stateMachine = stateMachine;
         this.baseCreation = baseCreation;
         this.editing = editing;
         this.roomService = roomService;
-        this.roomCreation = roomCreation;
+        this.draftSchedule = draftSchedule;
         handlers = new HashMap<>();
         handlers.put(OwnerSession.Step.CREATE_NAME, (text, bot) ->
                 baseCreation.handleName(text.userId(), text.value(), bot));
@@ -53,7 +53,7 @@ final class OwnerTextRouter {
         handlers.put(OwnerSession.Step.CREATE_TIMEZONE, (text, bot) ->
                 baseCreation.handleTimezone(text.userId(), text.value(), bot));
         handlers.put(OwnerSession.Step.CREATE_ROOM_NAME, (text, bot) ->
-                roomCreation.handleRoomName(text.userId(), text.value(), bot));
+                draftSchedule.handleRoomName(text.userId(), text.value(), bot));
         handlers.put(OwnerSession.Step.CREATE_EQUIPMENT, (text, bot) ->
                 baseCreation.handleEquipment(text.userId(), text.value(), bot));
         handlers.put(OwnerSession.Step.ROOM_CREATE_NAME, (text, bot) ->

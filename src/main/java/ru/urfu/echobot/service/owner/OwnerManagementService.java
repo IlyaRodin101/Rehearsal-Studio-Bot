@@ -31,13 +31,11 @@ public final class OwnerManagementService {
         sessions = new OwnerSessions();
         GenericStateMachine<OwnerSession.Step, OwnerSession.Event> stateMachine = createStateMachine();
         access = new OwnerAccess(baseRepository, roomRepository, ownerIds, messaging);
-        OwnerRoomCreationService roomCreation = new OwnerRoomCreationService(sessions, messaging, stateMachine);
-        OwnerDraftScheduleService draftSchedule = new OwnerDraftScheduleService(sessions, messaging,
-                stateMachine, roomCreation);
+        OwnerDraftScheduleService draftSchedule = new OwnerDraftScheduleService(sessions, messaging, stateMachine);
         OwnerButtons buttons = new OwnerButtons(messaging, baseRepository, access, sessions);
         baseService = new OwnerBaseService(baseRepository, sessions, access, messaging, stateMachine, buttons);
         OwnerRoomService roomService = new OwnerRoomService(sessions, access, messaging, stateMachine,
-                roomCreation, buttons);
+                draftSchedule, buttons);
         OwnerBaseEditingService editing = new OwnerBaseEditingService(sessions, access, messaging, stateMachine,
                 baseService, roomService);
         OwnerScheduleService schedule = new OwnerScheduleService(sessions, access, messaging, stateMachine,
@@ -47,10 +45,10 @@ public final class OwnerManagementService {
         OwnerCancellationRulesService cancellationRules = new OwnerCancellationRulesService(sessions, access,
                 messaging, baseService);
         callbackRouter = new OwnerCallbackRouter(access, baseService, creation, editing, schedule, roomService,
-                roomCreation);
+                draftSchedule);
         callbackRouter.addCancellationRules(cancellationRules);
         textRouter = new OwnerTextRouter(access, sessions, stateMachine, creation, editing, roomService,
-                roomCreation);
+                draftSchedule);
     }
 
     /// Создаёт автомат переходов настройки баз владельцем.

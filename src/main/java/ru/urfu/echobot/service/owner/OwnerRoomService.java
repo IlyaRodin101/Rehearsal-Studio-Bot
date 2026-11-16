@@ -13,6 +13,16 @@ final class OwnerRoomService {
     private static final String ROOM_CALLBACK = "owner:room:";
     /// Начало названия зала в сообщениях.
     private static final String ROOM_PREFIX = "Зал «";
+    /// Ответ «да» на вопрос об обязательности комментария.
+    private static final String YES = "yes";
+    /// Ответ «нет» на вопрос об обязательности комментария.
+    private static final String NO = "no";
+    /// Текст запроса названия зала.
+    private static final String ASK_ROOM = "Введите название нового зала.";
+    /// Вопрос об обязательности комментария.
+    private static final String ASK_REQUIRED = "Комментарий к записи в этом зале обязателен?";
+    /// Заголовок списка залов.
+    private static final String ROOMS_HEADER = "Залы базы:";
 
     /// Сессии владельцев.
     private final OwnerSessions sessions;
@@ -24,26 +34,26 @@ final class OwnerRoomService {
     private final GenericStateMachine<OwnerSession.Step, OwnerSession.Event> stateMachine;
     /// Клавиатуры залов.
     private final OwnerButtons buttons;
-    /// Добавление новых залов.
-    private final OwnerRoomAddService roomAdd;
+    /// Черновик новой базы.
+    private final OwnerDraftScheduleService draftSchedule;
 
     /// Создаёт сервис залов.
     ///
-    /// @param sessions     сессии владельцев
-    /// @param access       проверка прав
-    /// @param messaging    сообщения и клавиатуры
-    /// @param stateMachine автомат состояний
-    /// @param roomCreation залы новой базы
-    /// @param buttons      клавиатуры баз и залов
+    /// @param sessions      сессии владельцев
+    /// @param access        проверка прав
+    /// @param messaging     сообщения и клавиатуры
+    /// @param stateMachine  автомат состояний
+    /// @param draftSchedule черновик новой базы
+    /// @param buttons       клавиатуры баз и залов
     OwnerRoomService(OwnerSessions sessions, OwnerAccess access, OwnerMessaging messaging,
                      GenericStateMachine<OwnerSession.Step, OwnerSession.Event> stateMachine,
-                     OwnerRoomCreationService roomCreation, OwnerButtons buttons) {
+                     OwnerDraftScheduleService draftSchedule, OwnerButtons buttons) {
         this.sessions = sessions;
         this.access = access;
         this.messaging = messaging;
         this.stateMachine = stateMachine;
+        this.draftSchedule = draftSchedule;
         this.buttons = buttons;
-        roomAdd = new OwnerRoomAddService(sessions, access, messaging, stateMachine, roomCreation, buttons);
     }
 
     /// Показывает активные залы выбранной базы.
@@ -55,7 +65,7 @@ final class OwnerRoomService {
         Base base = access.selectedBase(userId, session, bot);
         if (base != null) {
             stateMachine.reset(session, OwnerSession.Step.IDLE);
-            messaging.send(bot, userId, "Залы базы:", buttons.roomsButtons(userId));
+            messaging.send(bot, userId, ROOMS_HEADER, buttons.roomsButtons(userId));
         }
     }
 
@@ -79,7 +89,10 @@ final class OwnerRoomService {
     /// @param userId идентификатор владельца
     /// @param bot    бот для отправки
     void askRoomName(long userId, Bot bot) {
-        roomAdd.askRoomName(userId, bot);
+        OwnerSession session = sessions.get(userId);
+        if (stateMachine.transition(session, OwnerSession.Event.ADD_ROOM_TO_BASE)) {
+            messaging.send(bot, userId, ASK_ROOM, messaging.backKeyboard());
+        }
     }
 
     /// Принимает название нового зала существующей базы.
@@ -88,7 +101,16 @@ final class OwnerRoomService {
     /// @param text   введённое название
     /// @param bot    бот для отправки
     void handleRoomName(long userId, String text, Bot bot) {
-        roomAdd.handleRoomName(userId, text, bot);
+        OwnerSession session = sessions.get(userId);
+        if (text.isBlank()) {
+            messaging.send(bot, userId, ASK_ROOM, messaging.backKeyboard());
+        } else if (stateMachine.transition(session, OwnerSession.Event.ENTER_ROOM_NAME)) {
+            session.pendingRoomName = text.trim();
+            messaging.send(bot, userId, ASK_REQUIRED,
+                    messaging.choices(messaging.button("Да", "owner:newrequired:yes"),
+                            messaging.button("Нет", "owner:newrequired:no"),
+                            messaging.button(OwnerMessaging.BACK_TEXT, OwnerMessaging.BACK_CALLBACK)));
+        }
     }
 
     /// Сохраняет новый зал после выбора обязательности комментария.
@@ -97,7 +119,30 @@ final class OwnerRoomService {
     /// @param value  ответ yes или no
     /// @param bot    бот для отправки
     void setNewRoomRequirement(long userId, String value, Bot bot) {
-        roomAdd.setNewRoomRequirement(userId, value, bot);
+        OwnerSession session = sessions.get(userId);
+        if (session.step == OwnerSession.Step.CREATE_ROOM_REQUIRED) {
+            draftSchedule.setRequirement(userId, value, bot);
+        } else if (session.step == OwnerSession.Step.ROOM_CREATE_REQUIRED && List.of(YES, NO).contains(value)) {
+            saveRoom(userId, access.selectedBase(userId, session, bot), value, bot);
+        } else {
+            access.requireOwner(userId, bot);
+            messaging.send(bot, userId, OwnerMessaging.UNAVAILABLE, messaging.backKeyboard());
+        }
+    }
+
+    /// Сохраняет зал существующей базы.
+    ///
+    /// @param userId идентификатор владельца
+    /// @param base   выбранная база
+    /// @param value  ответ yes или no
+    /// @param bot    бот для отправки
+    private void saveRoom(long userId, Base base, String value, Bot bot) {
+        OwnerSession session = sessions.get(userId);
+        if (base != null && stateMachine.transition(session, OwnerSession.Event.SET_ROOM_REQUIREMENT)) {
+            access.roomRepository().save(new Room(0, base.id(), session.pendingRoomName, YES.equals(value)));
+            session.pendingRoomName = null;
+            messaging.send(bot, userId, ROOMS_HEADER, buttons.roomsButtons(userId));
+        }
     }
 
     /// Начинает редактирование названия зала.
