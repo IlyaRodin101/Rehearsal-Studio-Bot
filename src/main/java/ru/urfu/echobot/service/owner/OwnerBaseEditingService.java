@@ -17,6 +17,10 @@ final class OwnerBaseEditingService {
     private static final String EMPTY_ROOM_NAME = "Название зала не может быть пустым.";
     /// Текст запроса оборудования.
     private static final String ASK_EQUIPMENT = "Введите список оборудования (можно оставить пустым).";
+    /// Минимальный срок бронирования.
+    private static final int MIN_LEAD_HOURS = 1;
+    /// Максимальный срок бронирования.
+    private static final int MAX_LEAD_HOURS = 48;
 
     /// Сессии владельцев.
     private final OwnerSessions sessions;
@@ -25,13 +29,11 @@ final class OwnerBaseEditingService {
     /// Сообщения и клавиатуры.
     private final OwnerMessaging messaging;
     /// Автомат состояний.
-    private final GenericStateMachine<OwnerStep, OwnerSession.Event> stateMachine;
+    private final GenericStateMachine<OwnerSession.Step, OwnerSession.Event> stateMachine;
     /// Основные операции с базами.
     private final OwnerBaseService baseService;
     /// Операции с залами.
     private final OwnerRoomService roomService;
-    /// Срок бронирования.
-    private final OwnerLeadService leadService;
 
     /// Создаёт сервис редактирования.
     ///
@@ -41,18 +43,15 @@ final class OwnerBaseEditingService {
     /// @param stateMachine автомат состояний
     /// @param baseService  основные операции с базами
     /// @param roomService  операции с залами
-    /// @param leadService  срок бронирования
     OwnerBaseEditingService(OwnerSessions sessions, OwnerAccess access, OwnerMessaging messaging,
-                            GenericStateMachine<OwnerStep, OwnerSession.Event> stateMachine,
-                            OwnerBaseService baseService,
-                            OwnerRoomService roomService, OwnerLeadService leadService) {
+                            GenericStateMachine<OwnerSession.Step, OwnerSession.Event> stateMachine,
+                            OwnerBaseService baseService, OwnerRoomService roomService) {
         this.sessions = sessions;
         this.access = access;
         this.messaging = messaging;
         this.stateMachine = stateMachine;
         this.baseService = baseService;
         this.roomService = roomService;
-        this.leadService = leadService;
     }
 
     /// Начинает редактирование поля базы.
@@ -78,7 +77,32 @@ final class OwnerBaseEditingService {
     /// @param hours  срок в часах
     /// @param bot    бот для отправки
     void selectLeadHours(long userId, int hours, Bot bot) {
-        leadService.selectLeadHours(userId, hours, bot);
+        OwnerSession session = sessions.get(userId);
+        boolean valid = hours >= MIN_LEAD_HOURS && hours <= MAX_LEAD_HOURS;
+        if (session.step == OwnerSession.Step.CREATE_LEAD && valid
+                && stateMachine.transition(session, OwnerSession.Event.ENTER_LEAD)) {
+            session.leadHours = hours;
+            messaging.send(bot, userId, ASK_EQUIPMENT, messaging.backKeyboard());
+        } else if (valid) {
+            updateExistingBase(userId, session, hours, bot);
+        } else {
+            baseService.unavailable(userId, bot);
+        }
+    }
+
+    /// Сохраняет новый срок бронирования существующей базы.
+    ///
+    /// @param userId  идентификатор владельца
+    /// @param session сессия владельца
+    /// @param hours   срок в часах
+    /// @param bot     бот для отправки
+    private void updateExistingBase(long userId, OwnerSession session, int hours, Bot bot) {
+        Base base = access.selectedBase(userId, session, bot);
+        if (base != null) {
+            baseService.updateBase(userId, baseService.copy(base, base.name(), base.address(), base.timezone(),
+                    hours, base.equipment(), base.openingHours()));
+            baseService.showBaseMenu(userId, bot);
+        }
     }
 
     /// Сохраняет отредактированное текстовое значение.
@@ -89,7 +113,7 @@ final class OwnerBaseEditingService {
     void handleEditText(long userId, String text, Bot bot) {
         OwnerSession session = sessions.get(userId);
         String value = text.trim();
-        if (session.step == OwnerStep.ROOM_EDIT_NAME) {
+        if (session.step == OwnerSession.Step.ROOM_EDIT_NAME) {
             saveRoomName(userId, session, value, bot);
         } else {
             saveBaseField(userId, session, text, value, bot);
@@ -126,11 +150,11 @@ final class OwnerBaseEditingService {
             return;
         }
         Base edited = baseService.copy(base,
-                session.step == OwnerStep.EDIT_NAME ? value : base.name(),
-                session.step == OwnerStep.EDIT_ADDRESS ? value : base.address(),
-                session.step == OwnerStep.EDIT_TIMEZONE ? timezone : base.timezone(),
+                session.step == OwnerSession.Step.EDIT_NAME ? value : base.name(),
+                session.step == OwnerSession.Step.EDIT_ADDRESS ? value : base.address(),
+                session.step == OwnerSession.Step.EDIT_TIMEZONE ? timezone : base.timezone(),
                 base.bookingLeadHours(),
-                session.step == OwnerStep.EDIT_EQUIPMENT ? text : base.equipment(),
+                session.step == OwnerSession.Step.EDIT_EQUIPMENT ? text : base.equipment(),
                 base.openingHours());
         if (stateMachine.transition(session, OwnerSession.Event.SAVE_TEXT)) {
             baseService.updateBase(userId, edited);
@@ -147,7 +171,7 @@ final class OwnerBaseEditingService {
     /// @return нормализованный пояс или null, если он не нужен или неверен
     private String editedTimezone(long userId, OwnerSession session, String value, Bot bot) {
         String timezone = value;
-        if (session.step == OwnerStep.EDIT_TIMEZONE) {
+        if (session.step == OwnerSession.Step.EDIT_TIMEZONE) {
             try {
                 timezone = ZoneId.of(value).getId();
             } catch (DateTimeException exception) {
@@ -166,7 +190,7 @@ final class OwnerBaseEditingService {
     /// @param bot     бот для отправки
     /// @return true, если значение допустимо
     private boolean validBaseValue(long userId, OwnerSession session, String value, Bot bot) {
-        boolean empty = value.isEmpty() && session.step != OwnerStep.EDIT_EQUIPMENT;
+        boolean empty = value.isEmpty() && session.step != OwnerSession.Step.EDIT_EQUIPMENT;
         if (empty) {
             messaging.send(bot, userId, EMPTY_VALUE, messaging.backKeyboard());
         }

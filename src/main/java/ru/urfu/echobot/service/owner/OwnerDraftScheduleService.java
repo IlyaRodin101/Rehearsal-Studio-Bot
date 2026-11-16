@@ -24,7 +24,7 @@ final class OwnerDraftScheduleService {
     /// Сообщения и клавиатуры.
     private final OwnerMessaging messaging;
     /// Автомат состояний.
-    private final GenericStateMachine<OwnerStep, OwnerSession.Event> stateMachine;
+    private final GenericStateMachine<OwnerSession.Step, OwnerSession.Event> stateMachine;
     /// Залы новой базы.
     private final OwnerRoomCreationService roomCreation;
 
@@ -35,7 +35,7 @@ final class OwnerDraftScheduleService {
     /// @param stateMachine автомат состояний
     /// @param roomCreation залы новой базы
     OwnerDraftScheduleService(OwnerSessions sessions, OwnerMessaging messaging,
-                              GenericStateMachine<OwnerStep, OwnerSession.Event> stateMachine,
+                              GenericStateMachine<OwnerSession.Step, OwnerSession.Event> stateMachine,
                               OwnerRoomCreationService roomCreation) {
         this.sessions = sessions;
         this.messaging = messaging;

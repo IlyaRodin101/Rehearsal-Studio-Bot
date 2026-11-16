@@ -10,7 +10,51 @@ import ru.urfu.echobot.model.Room;
 import ru.urfu.echobot.service.GenericStateMachine;
 
 /// Хранит незавершённую форму и выбранные объекты одного владельца базы.
-final class OwnerSession implements GenericStateMachine.State<OwnerStep> {
+final class OwnerSession implements GenericStateMachine.State<OwnerSession.Step> {
+    /// Шаги диалога владельца базы.
+    enum Step {
+        /// Владелец не заполняет форму.
+        IDLE,
+        /// Ввод названия новой базы.
+        CREATE_NAME,
+        /// Ввод адреса новой базы.
+        CREATE_ADDRESS,
+        /// Ввод часового пояса новой базы.
+        CREATE_TIMEZONE,
+        /// Выбор часа открытия при создании базы.
+        CREATE_OPENING,
+        /// Выбор часа закрытия при создании базы.
+        CREATE_CLOSING,
+        /// Ввод названия зала новой базы.
+        CREATE_ROOM_NAME,
+        /// Выбор обязательности комментария для зала новой базы.
+        CREATE_ROOM_REQUIRED,
+        /// Добавление ещё одного зала новой базы.
+        CREATE_MORE_ROOMS,
+        /// Выбор срока бронирования новой базы.
+        CREATE_LEAD,
+        /// Ввод оборудования новой базы.
+        CREATE_EQUIPMENT,
+        /// Ввод названия нового зала существующей базы.
+        ROOM_CREATE_NAME,
+        /// Выбор обязательности комментария для нового зала.
+        ROOM_CREATE_REQUIRED,
+        /// Редактирование названия базы.
+        EDIT_NAME,
+        /// Редактирование адреса базы.
+        EDIT_ADDRESS,
+        /// Редактирование часового пояса базы.
+        EDIT_TIMEZONE,
+        /// Редактирование оборудования базы.
+        EDIT_EQUIPMENT,
+        /// Редактирование названия зала.
+        ROOM_EDIT_NAME,
+        /// Подтверждение удаления зала.
+        DELETE_ROOM,
+        /// Подтверждение удаления базы.
+        DELETE_BASE
+    }
+
     /// События, вызывающие переход между шагами настройки базы.
     enum Event {
         /// Владелец начал создание базы.
@@ -70,7 +114,7 @@ final class OwnerSession implements GenericStateMachine.State<OwnerStep> {
     }
 
     /// Текущий шаг диалога.
-    OwnerStep step = OwnerStep.IDLE;
+    Step step = Step.IDLE;
     /// Идентификатор выбранной базы.
     long selectedBaseId;
     /// Идентификатор выбранного зала.
@@ -102,7 +146,7 @@ final class OwnerSession implements GenericStateMachine.State<OwnerStep> {
     ///
     /// @return текущий шаг
     @Override
-    public OwnerStep state() {
+    public Step state() {
         return step;
     }
 
@@ -110,7 +154,7 @@ final class OwnerSession implements GenericStateMachine.State<OwnerStep> {
     ///
     /// @param value новый шаг
     @Override
-    public void state(OwnerStep value) {
+    public void state(Step value) {
         step = value;
     }
 
@@ -120,7 +164,7 @@ final class OwnerSession implements GenericStateMachine.State<OwnerStep> {
         selectedRoomId = 0;
         selectedDay = 0;
         resetDraft();
-        step = OwnerStep.IDLE;
+        step = Step.IDLE;
     }
 
     /// Очищает данные создаваемой базы, сохраняя выбранные объекты.

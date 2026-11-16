@@ -34,7 +34,7 @@ final class OwnerScheduleService {
     /// Сообщения и клавиатуры.
     private final OwnerMessaging messaging;
     /// Автомат состояний.
-    private final GenericStateMachine<OwnerStep, OwnerSession.Event> stateMachine;
+    private final GenericStateMachine<OwnerSession.Step, OwnerSession.Event> stateMachine;
     /// Основные операции с базами.
     private final OwnerBaseService baseService;
     /// Изменение графика.
@@ -49,7 +49,8 @@ final class OwnerScheduleService {
     /// @param baseService   основные операции с базами
     /// @param draftSchedule черновик графика новой базы
     OwnerScheduleService(OwnerSessions sessions, OwnerAccess access, OwnerMessaging messaging,
-                         GenericStateMachine<OwnerStep, OwnerSession.Event> stateMachine, OwnerBaseService baseService,
+                         GenericStateMachine<OwnerSession.Step, OwnerSession.Event> stateMachine,
+                         OwnerBaseService baseService,
                          OwnerDraftScheduleService draftSchedule) {
         this.sessions = sessions;
         this.access = access;
@@ -67,7 +68,7 @@ final class OwnerScheduleService {
         OwnerSession session = sessions.get(userId);
         Base base = access.selectedBase(userId, session, bot);
         if (base != null) {
-            stateMachine.reset(session, OwnerStep.IDLE);
+            stateMachine.reset(session, OwnerSession.Step.IDLE);
             List<List<Button>> rows = new ArrayList<>();
             for (DayOfWeek day : DayOfWeek.values()) {
                 OpeningHours hours = base.hoursOn(day).orElse(null);
@@ -90,7 +91,7 @@ final class OwnerScheduleService {
         Base base = access.selectedBase(userId, session, bot);
         if (base != null && validDay(day)) {
             session.selectedDay = day;
-            stateMachine.reset(session, OwnerStep.IDLE);
+            stateMachine.reset(session, OwnerSession.Step.IDLE);
             OpeningHours hours = base.hoursOn(DayOfWeek.of(day)).orElse(null);
             List<List<Button>> rows = new ArrayList<>();
             rows.add(messaging.row(messaging.button("Час открытия", "owner:opening:" + day),

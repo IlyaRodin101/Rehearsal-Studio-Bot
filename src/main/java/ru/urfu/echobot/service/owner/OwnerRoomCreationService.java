@@ -25,7 +25,7 @@ final class OwnerRoomCreationService {
     /// Сообщения и клавиатуры.
     private final OwnerMessaging messaging;
     /// Автомат состояний.
-    private final GenericStateMachine<OwnerStep, OwnerSession.Event> stateMachine;
+    private final GenericStateMachine<OwnerSession.Step, OwnerSession.Event> stateMachine;
 
     /// Создаёт сервис залов новой базы.
     ///
@@ -33,7 +33,7 @@ final class OwnerRoomCreationService {
     /// @param messaging    сообщения и клавиатуры
     /// @param stateMachine автомат состояний
     OwnerRoomCreationService(OwnerSessions sessions, OwnerMessaging messaging,
-                             GenericStateMachine<OwnerStep, OwnerSession.Event> stateMachine) {
+                             GenericStateMachine<OwnerSession.Step, OwnerSession.Event> stateMachine) {
         this.sessions = sessions;
         this.messaging = messaging;
         this.stateMachine = stateMachine;
@@ -69,7 +69,7 @@ final class OwnerRoomCreationService {
     /// @param bot    бот для отправки
     void setRequirement(long userId, String value, Bot bot) {
         OwnerSession session = sessions.get(userId);
-        if (session.step == OwnerStep.CREATE_ROOM_REQUIRED && List.of(YES, NO).contains(value)
+        if (session.step == OwnerSession.Step.CREATE_ROOM_REQUIRED && List.of(YES, NO).contains(value)
                 && stateMachine.transition(session, OwnerSession.Event.SET_ROOM_REQUIREMENT)) {
             session.newRooms.add(new Room(0, 0, session.pendingRoomName, YES.equals(value)));
             session.pendingRoomName = null;
@@ -87,10 +87,10 @@ final class OwnerRoomCreationService {
     /// @param bot    бот для отправки
     void addAnotherRoom(long userId, String choice, Bot bot) {
         OwnerSession session = sessions.get(userId);
-        if (session.step == OwnerStep.CREATE_MORE_ROOMS && "add".equals(choice)
+        if (session.step == OwnerSession.Step.CREATE_MORE_ROOMS && "add".equals(choice)
                 && stateMachine.transition(session, OwnerSession.Event.ADD_ROOM)) {
             messaging.send(bot, userId, ASK_ROOM, messaging.backKeyboard());
-        } else if (session.step == OwnerStep.CREATE_MORE_ROOMS && "done".equals(choice)
+        } else if (session.step == OwnerSession.Step.CREATE_MORE_ROOMS && "done".equals(choice)
                 && stateMachine.transition(session, OwnerSession.Event.FINISH_ROOMS)) {
             messaging.showLeadHours(userId, bot);
         }

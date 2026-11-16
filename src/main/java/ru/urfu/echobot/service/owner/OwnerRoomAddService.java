@@ -24,7 +24,7 @@ final class OwnerRoomAddService {
     /// Сообщения и клавиатуры.
     private final OwnerMessaging messaging;
     /// Автомат состояний.
-    private final GenericStateMachine<OwnerStep, OwnerSession.Event> stateMachine;
+    private final GenericStateMachine<OwnerSession.Step, OwnerSession.Event> stateMachine;
     /// Залы новой базы.
     private final OwnerRoomCreationService roomCreation;
     /// Клавиатуры залов.
@@ -39,7 +39,7 @@ final class OwnerRoomAddService {
     /// @param roomCreation залы новой базы
     /// @param buttons      клавиатуры залов
     OwnerRoomAddService(OwnerSessions sessions, OwnerAccess access, OwnerMessaging messaging,
-                        GenericStateMachine<OwnerStep, OwnerSession.Event> stateMachine,
+                        GenericStateMachine<OwnerSession.Step, OwnerSession.Event> stateMachine,
                         OwnerRoomCreationService roomCreation,
                         OwnerButtons buttons) {
         this.sessions = sessions;
@@ -86,9 +86,9 @@ final class OwnerRoomAddService {
     /// @param bot    бот для отправки
     void setNewRoomRequirement(long userId, String value, Bot bot) {
         OwnerSession session = sessions.get(userId);
-        if (session.step == OwnerStep.CREATE_ROOM_REQUIRED) {
+        if (session.step == OwnerSession.Step.CREATE_ROOM_REQUIRED) {
             roomCreation.setRequirement(userId, value, bot);
-        } else if (session.step == OwnerStep.ROOM_CREATE_REQUIRED && List.of(YES, NO).contains(value)) {
+        } else if (session.step == OwnerSession.Step.ROOM_CREATE_REQUIRED && List.of(YES, NO).contains(value)) {
             saveRoom(userId, access.selectedBase(userId, session, bot), value, bot);
         } else {
             access.requireOwner(userId, bot);

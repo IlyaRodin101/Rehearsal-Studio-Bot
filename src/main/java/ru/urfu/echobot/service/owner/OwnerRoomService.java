@@ -21,7 +21,7 @@ final class OwnerRoomService {
     /// Сообщения и клавиатуры.
     private final OwnerMessaging messaging;
     /// Автомат состояний.
-    private final GenericStateMachine<OwnerStep, OwnerSession.Event> stateMachine;
+    private final GenericStateMachine<OwnerSession.Step, OwnerSession.Event> stateMachine;
     /// Клавиатуры залов.
     private final OwnerButtons buttons;
     /// Добавление новых залов.
@@ -36,7 +36,7 @@ final class OwnerRoomService {
     /// @param roomCreation залы новой базы
     /// @param buttons      клавиатуры баз и залов
     OwnerRoomService(OwnerSessions sessions, OwnerAccess access, OwnerMessaging messaging,
-                     GenericStateMachine<OwnerStep, OwnerSession.Event> stateMachine,
+                     GenericStateMachine<OwnerSession.Step, OwnerSession.Event> stateMachine,
                      OwnerRoomCreationService roomCreation, OwnerButtons buttons) {
         this.sessions = sessions;
         this.access = access;
@@ -54,7 +54,7 @@ final class OwnerRoomService {
         OwnerSession session = sessions.get(userId);
         Base base = access.selectedBase(userId, session, bot);
         if (base != null) {
-            stateMachine.reset(session, OwnerStep.IDLE);
+            stateMachine.reset(session, OwnerSession.Step.IDLE);
             messaging.send(bot, userId, "Залы базы:", buttons.roomsButtons(userId));
         }
     }
@@ -69,7 +69,7 @@ final class OwnerRoomService {
         Room room = access.activeOwnedRoom(userId, session, roomId, bot);
         if (room != null) {
             session.selectedRoomId = room.id();
-            stateMachine.reset(session, OwnerStep.IDLE);
+            stateMachine.reset(session, OwnerSession.Step.IDLE);
             messaging.send(bot, userId, buttons.roomTitle(room), buttons.roomMenuButtons(room));
         }
     }
@@ -152,7 +152,7 @@ final class OwnerRoomService {
     void deleteRoom(long userId, long roomId, Bot bot) {
         OwnerSession session = sessions.get(userId);
         Room room = access.activeOwnedRoom(userId, session, roomId, bot);
-        if (room != null && session.step == OwnerStep.DELETE_ROOM
+        if (room != null && session.step == OwnerSession.Step.DELETE_ROOM
                 && stateMachine.transition(session, OwnerSession.Event.DELETE_ROOM_CONFIRMED)) {
             access.roomRepository().deactivate(room.id());
             messaging.send(bot, userId, ROOM_PREFIX + room.name() + "» удалён.", buttons.roomsButtons(userId));

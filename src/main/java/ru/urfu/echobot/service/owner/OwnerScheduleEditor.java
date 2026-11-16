@@ -23,7 +23,7 @@ final class OwnerScheduleEditor {
     /// Сообщения и клавиатуры.
     private final OwnerMessaging messaging;
     /// Автомат состояний.
-    private final GenericStateMachine<OwnerStep, OwnerSession.Event> stateMachine;
+    private final GenericStateMachine<OwnerSession.Step, OwnerSession.Event> stateMachine;
     /// Основные операции с базами.
     private final OwnerBaseService baseService;
     /// Черновик графика новой базы.
@@ -38,7 +38,8 @@ final class OwnerScheduleEditor {
     /// @param baseService   основные операции с базами
     /// @param draftSchedule черновик графика новой базы
     OwnerScheduleEditor(OwnerSessions sessions, OwnerAccess access, OwnerMessaging messaging,
-                        GenericStateMachine<OwnerStep, OwnerSession.Event> stateMachine, OwnerBaseService baseService,
+                        GenericStateMachine<OwnerSession.Step, OwnerSession.Event> stateMachine,
+                        OwnerBaseService baseService,
                         OwnerDraftScheduleService draftSchedule) {
         this.sessions = sessions;
         this.access = access;
@@ -56,7 +57,7 @@ final class OwnerScheduleEditor {
     /// @return день для отображения или -1, если отображать нечего
     int closeDay(long userId, int day, Bot bot) {
         OwnerSession session = sessions.get(userId);
-        if (day == 0 && session.step == OwnerStep.CREATE_OPENING) {
+        if (day == 0 && session.step == OwnerSession.Step.CREATE_OPENING) {
             draftSchedule.closeDay(userId, bot);
             return -1;
         }
@@ -78,7 +79,7 @@ final class OwnerScheduleEditor {
     /// @return день для отображения или -1, если отображать нечего
     int setOpeningHour(long userId, int hour, Bot bot) {
         OwnerSession session = sessions.get(userId);
-        if (session.step == OwnerStep.CREATE_OPENING) {
+        if (session.step == OwnerSession.Step.CREATE_OPENING) {
             draftSchedule.setOpeningHour(userId, hour, bot);
             return -1;
         }
@@ -104,7 +105,7 @@ final class OwnerScheduleEditor {
     /// @return день для отображения или -1, если отображать нечего
     int setClosingHour(long userId, int hour, Bot bot) {
         OwnerSession session = sessions.get(userId);
-        if (session.step == OwnerStep.CREATE_CLOSING) {
+        if (session.step == OwnerSession.Step.CREATE_CLOSING) {
             draftSchedule.setClosingHour(userId, hour, bot);
             return -1;
         }

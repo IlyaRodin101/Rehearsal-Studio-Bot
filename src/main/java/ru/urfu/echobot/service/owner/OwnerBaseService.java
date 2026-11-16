@@ -15,6 +15,8 @@ import ru.urfu.echobot.repository.BaseRepository;
 final class OwnerBaseService {
     /// Начало названия базы в сообщениях.
     private static final String BASE_PREFIX = "База «";
+    /// Подпись кнопки удаления базы.
+    private static final String DELETE_BASE_TEXT = "Удалить базу";
 
     /// Хранилище баз.
     private final BaseRepository baseRepository;
@@ -25,11 +27,9 @@ final class OwnerBaseService {
     /// Сообщения и клавиатуры.
     private final OwnerMessaging messaging;
     /// Автомат состояний владельца.
-    private final GenericStateMachine<OwnerStep, OwnerSession.Event> stateMachine;
+    private final GenericStateMachine<OwnerSession.Step, OwnerSession.Event> stateMachine;
     /// Клавиатуры списка и меню баз и залов.
     private final OwnerButtons buttons;
-    /// Удаление баз.
-    private final OwnerBaseDeletionService deletion;
 
     /// Создаёт сервис баз владельца.
     ///
@@ -40,7 +40,7 @@ final class OwnerBaseService {
     /// @param stateMachine   автомат состояний
     /// @param buttons        клавиатуры баз и залов
     OwnerBaseService(BaseRepository baseRepository, OwnerSessions sessions, OwnerAccess access,
-                     OwnerMessaging messaging, GenericStateMachine<OwnerStep, OwnerSession.Event> stateMachine,
+                     OwnerMessaging messaging, GenericStateMachine<OwnerSession.Step, OwnerSession.Event> stateMachine,
                      OwnerButtons buttons) {
         this.baseRepository = baseRepository;
         this.sessions = sessions;
@@ -48,7 +48,6 @@ final class OwnerBaseService {
         this.messaging = messaging;
         this.stateMachine = stateMachine;
         this.buttons = buttons;
-        deletion = new OwnerBaseDeletionService(baseRepository, sessions, messaging, stateMachine, buttons);
     }
 
     /// Показывает базы владельца.
@@ -100,7 +99,7 @@ final class OwnerBaseService {
         OwnerSession session = sessions.get(userId);
         Base base = access.selectedBase(userId, session, bot);
         if (base != null) {
-            stateMachine.reset(session, OwnerStep.IDLE);
+            stateMachine.reset(session, OwnerSession.Step.IDLE);
             messaging.send(bot, userId, BASE_PREFIX + base.name() + "». Что изменить?", buttons.baseMenuButtons(base));
         }
     }
@@ -111,7 +110,16 @@ final class OwnerBaseService {
     /// @param baseId идентификатор базы
     /// @param bot    бот для отправки
     void confirmBaseDelete(long userId, long baseId, Bot bot) {
-        deletion.confirmBaseDelete(userId, baseId, bot);
+        OwnerSession session = sessions.get(userId);
+        Base base = baseRepository.findById(baseId).orElse(null);
+        if (base == null || base.ownerId() != userId || session.selectedBaseId != baseId) {
+            unavailable(userId, bot);
+        } else if (stateMachine.transition(session, OwnerSession.Event.DELETE_BASE)) {
+            messaging.send(bot, userId, "Удалить базу «" + base.name()
+                    + "» вместе со всеми залами и записями? Это действие нельзя отменить.",
+                    messaging.choices(messaging.button(DELETE_BASE_TEXT, "owner:deletebaseyes:" + base.id()),
+                            messaging.button("Отмена", "owner:setting")));
+        }
     }
 
     /// Удаляет базу после подтверждения.
@@ -120,7 +128,16 @@ final class OwnerBaseService {
     /// @param baseId идентификатор базы
     /// @param bot    бот для отправки
     void deleteBase(long userId, long baseId, Bot bot) {
-        deletion.deleteBase(userId, baseId, bot);
+        OwnerSession session = sessions.get(userId);
+        Base base = baseRepository.findById(baseId).orElse(null);
+        boolean deleted = session.step == OwnerSession.Step.DELETE_BASE && base != null && base.ownerId() == userId
+                && session.selectedBaseId == baseId && baseRepository.deleteByIdAndOwnerId(baseId, userId);
+        if (!deleted || !stateMachine.transition(session, OwnerSession.Event.DELETE_BASE_CONFIRMED)) {
+            unavailable(userId, bot);
+        } else {
+            session.reset();
+            messaging.send(bot, userId, BASE_PREFIX + base.name() + "» удалена.", buttons.baseListButtons(userId));
+        }
     }
 
     /// Сообщает о недоступном действии.

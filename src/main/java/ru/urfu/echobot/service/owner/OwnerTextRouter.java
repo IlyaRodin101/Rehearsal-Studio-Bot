@@ -13,7 +13,7 @@ final class OwnerTextRouter {
     /// Сессии владельцев.
     private final OwnerSessions sessions;
     /// Автомат состояний.
-    private final GenericStateMachine<OwnerStep, OwnerSession.Event> stateMachine;
+    private final GenericStateMachine<OwnerSession.Step, OwnerSession.Event> stateMachine;
     /// Создание новой базы.
     private final OwnerBaseCreationService baseCreation;
     /// Редактирование базы.
@@ -23,7 +23,7 @@ final class OwnerTextRouter {
     /// Залы новой базы.
     private final OwnerRoomCreationService roomCreation;
     /// Обработчики текста по шагам.
-    private final Map<OwnerStep, BiConsumer<OwnerText, Bot>> handlers;
+    private final Map<OwnerSession.Step, BiConsumer<OwnerText, Bot>> handlers;
 
     /// Создаёт маршрутизатор текста владельца.
     ///
@@ -35,7 +35,7 @@ final class OwnerTextRouter {
     /// @param roomService  залы существующей базы
     /// @param roomCreation залы новой базы
     OwnerTextRouter(OwnerAccess access, OwnerSessions sessions,
-                    GenericStateMachine<OwnerStep, OwnerSession.Event> stateMachine,
+                    GenericStateMachine<OwnerSession.Step, OwnerSession.Event> stateMachine,
                     OwnerBaseCreationService baseCreation, OwnerBaseEditingService editing,
                     OwnerRoomService roomService, OwnerRoomCreationService roomCreation) {
         this.access = access;
@@ -46,27 +46,27 @@ final class OwnerTextRouter {
         this.roomService = roomService;
         this.roomCreation = roomCreation;
         handlers = new HashMap<>();
-        handlers.put(OwnerStep.CREATE_NAME, (text, bot) ->
+        handlers.put(OwnerSession.Step.CREATE_NAME, (text, bot) ->
                 baseCreation.handleName(text.userId(), text.value(), bot));
-        handlers.put(OwnerStep.CREATE_ADDRESS, (text, bot) ->
+        handlers.put(OwnerSession.Step.CREATE_ADDRESS, (text, bot) ->
                 baseCreation.handleAddress(text.userId(), text.value(), bot));
-        handlers.put(OwnerStep.CREATE_TIMEZONE, (text, bot) ->
+        handlers.put(OwnerSession.Step.CREATE_TIMEZONE, (text, bot) ->
                 baseCreation.handleTimezone(text.userId(), text.value(), bot));
-        handlers.put(OwnerStep.CREATE_ROOM_NAME, (text, bot) ->
+        handlers.put(OwnerSession.Step.CREATE_ROOM_NAME, (text, bot) ->
                 roomCreation.handleRoomName(text.userId(), text.value(), bot));
-        handlers.put(OwnerStep.CREATE_EQUIPMENT, (text, bot) ->
+        handlers.put(OwnerSession.Step.CREATE_EQUIPMENT, (text, bot) ->
                 baseCreation.handleEquipment(text.userId(), text.value(), bot));
-        handlers.put(OwnerStep.ROOM_CREATE_NAME, (text, bot) ->
+        handlers.put(OwnerSession.Step.ROOM_CREATE_NAME, (text, bot) ->
                 roomService.handleRoomName(text.userId(), text.value(), bot));
-        handlers.put(OwnerStep.EDIT_NAME, (text, bot) ->
+        handlers.put(OwnerSession.Step.EDIT_NAME, (text, bot) ->
                 editing.handleEditText(text.userId(), text.value(), bot));
-        handlers.put(OwnerStep.EDIT_ADDRESS, (text, bot) ->
+        handlers.put(OwnerSession.Step.EDIT_ADDRESS, (text, bot) ->
                 editing.handleEditText(text.userId(), text.value(), bot));
-        handlers.put(OwnerStep.EDIT_TIMEZONE, (text, bot) ->
+        handlers.put(OwnerSession.Step.EDIT_TIMEZONE, (text, bot) ->
                 editing.handleEditText(text.userId(), text.value(), bot));
-        handlers.put(OwnerStep.EDIT_EQUIPMENT, (text, bot) ->
+        handlers.put(OwnerSession.Step.EDIT_EQUIPMENT, (text, bot) ->
                 editing.handleEditText(text.userId(), text.value(), bot));
-        handlers.put(OwnerStep.ROOM_EDIT_NAME, (text, bot) ->
+        handlers.put(OwnerSession.Step.ROOM_EDIT_NAME, (text, bot) ->
                 editing.handleEditText(text.userId(), text.value(), bot));
     }
 
@@ -78,11 +78,11 @@ final class OwnerTextRouter {
     /// @return true, если текст обработан формой владельца
     boolean handle(long userId, String text, Bot bot) {
         OwnerSession session = sessions.existing(userId);
-        if (session == null || session.step == OwnerStep.IDLE) {
+        if (session == null || session.step == OwnerSession.Step.IDLE) {
             return false;
         }
         if (!access.requireOwner(userId, bot)) {
-            stateMachine.reset(session, OwnerStep.IDLE);
+            stateMachine.reset(session, OwnerSession.Step.IDLE);
             return true;
         }
         BiConsumer<OwnerText, Bot> handler = handlers.get(session.step);

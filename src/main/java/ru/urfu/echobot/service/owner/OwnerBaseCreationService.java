@@ -27,7 +27,7 @@ final class OwnerBaseCreationService {
     /// Сообщения и клавиатуры.
     private final OwnerMessaging messaging;
     /// Автомат состояний.
-    private final GenericStateMachine<OwnerStep, OwnerSession.Event> stateMachine;
+    private final GenericStateMachine<OwnerSession.Step, OwnerSession.Event> stateMachine;
     /// Хранилище баз.
     private final BaseRepository baseRepository;
     /// Хранилище залов.
@@ -47,7 +47,7 @@ final class OwnerBaseCreationService {
     /// @param baseService    основные операции с базами
     /// @param draftSchedule  черновик графика
     OwnerBaseCreationService(OwnerSessions sessions, OwnerMessaging messaging,
-                             GenericStateMachine<OwnerStep, OwnerSession.Event> stateMachine,
+                             GenericStateMachine<OwnerSession.Step, OwnerSession.Event> stateMachine,
                              BaseRepository baseRepository, RoomRepository roomRepository,
                              OwnerBaseService baseService, OwnerDraftScheduleService draftSchedule) {
         this.sessions = sessions;
