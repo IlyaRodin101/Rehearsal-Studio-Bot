@@ -6,7 +6,7 @@ package ru.urfu.echobot.service.booking;
 /// @param userId идентификатор пользователя
 /// @param flow   состояние диалога пользователя
 /// @param parts  части callback-команды, разделённые двоеточием
-record BookingCallback(long chatId, long userId, BookingFlow flow, String[] parts) {
+record BookingCallback(long chatId, long userId, BookingStep flow, String[] parts) {
 
     /// Возвращает количество частей callback-команды.
     ///

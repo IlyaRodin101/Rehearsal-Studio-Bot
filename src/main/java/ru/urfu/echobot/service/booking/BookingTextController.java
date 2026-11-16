@@ -26,7 +26,7 @@ public final class BookingTextController {
     /// Обработчики текстовых команд.
     private final Map<String, BiConsumer<BookingText, Bot>> commandHandlers;
     /// Обработчики текста на шагах диалога.
-    private final Map<BookingFlow.Step, BiConsumer<BookingText, Bot>> stepHandlers;
+    private final Map<BookingStep.Step, BiConsumer<BookingText, Bot>> stepHandlers;
 
     /// Создаёт контроллер текста.
     ///
@@ -49,11 +49,11 @@ public final class BookingTextController {
         commandHandlers.put(BACK_TEXT, (text, bot) ->
                 menuController.back(text.chatId(), text.flow(), bot));
         stepHandlers = new HashMap<>();
-        stepHandlers.put(BookingFlow.Step.BOOK_NAME, (text, bot) ->
+        stepHandlers.put(BookingStep.Step.BOOK_NAME, (text, bot) ->
                 formService.handleNameText(text.chatId(), text.flow(), text.text(), bot));
-        stepHandlers.put(BookingFlow.Step.BOOK_PHONE, (text, bot) ->
+        stepHandlers.put(BookingStep.Step.BOOK_PHONE, (text, bot) ->
                 formService.handlePhoneText(text.chatId(), text.flow(), text.text(), bot));
-        stepHandlers.put(BookingFlow.Step.BOOK_COMMENT, (text, bot) ->
+        stepHandlers.put(BookingStep.Step.BOOK_COMMENT, (text, bot) ->
                 confirmation.handleCommentText(text.chatId(), text.flow(), text.text(), bot));
     }
 
@@ -63,7 +63,7 @@ public final class BookingTextController {
     /// @param chatId  идентификатор чата
     /// @param flow    состояние диалога
     /// @param bot     бот для отправки сообщений
-    public void handle(String rawText, long chatId, BookingFlow flow, Bot bot) {
+    public void handle(String rawText, long chatId, BookingStep flow, Bot bot) {
         String text = rawText.trim();
         BookingText context = new BookingText(chatId, flow, text);
         BiConsumer<BookingText, Bot> commandHandler = commandHandlers.get(text);
@@ -82,6 +82,6 @@ public final class BookingTextController {
     /// @param chatId идентификатор чата
     /// @param flow   состояние диалога пользователя
     /// @param text   текст сообщения без внешних пробелов
-    private record BookingText(long chatId, BookingFlow flow, String text) {
+    private record BookingText(long chatId, BookingStep flow, String text) {
     }
 }

@@ -34,7 +34,7 @@ public final class BookingNavigationController {
     /// Контроллер главного меню.
     private final BookingMenuController menuController;
     /// Автомат состояний бронирования.
-    private final GenericStateMachine<BookingFlow.Step, BookingFlow.Event> stateMachine;
+    private final GenericStateMachine<BookingStep.Step, BookingStep.Event> stateMachine;
     /// Сервис комментария и подтверждения.
     private final BookingConfirmationService confirmation;
     /// Фабрика клавиатур.
@@ -54,7 +54,7 @@ public final class BookingNavigationController {
                                        BookingTimeSelectionService timeSelection,
                                        BookingFormService formService,
                                        BookingMenuController menuController,
-                                       GenericStateMachine<BookingFlow.Step, BookingFlow.Event> stateMachine,
+                                       GenericStateMachine<BookingStep.Step, BookingStep.Event> stateMachine,
                                        BookingConfirmationService confirmation) {
         this.baseSelection = baseSelection;
         this.dateSelection = dateSelection;
@@ -70,10 +70,10 @@ public final class BookingNavigationController {
     /// @param chatId идентификатор чата
     /// @param flow   состояние диалога
     /// @param bot    бот для отправки сообщений
-    public void beginBooking(long chatId, BookingFlow flow, Bot bot) {
-        stateMachine.reset(flow, BookingFlow.Step.MENU);
+    public void beginBooking(long chatId, BookingStep flow, Bot bot) {
+        stateMachine.reset(flow, BookingStep.Step.MENU);
         flow.clearBooking();
-        if (stateMachine.transition(flow, BookingFlow.Event.BEGIN_BOOKING)) {
+        if (stateMachine.transition(flow, BookingStep.Event.BEGIN_BOOKING)) {
             baseSelection.showBaseChoices(chatId, flow, bot);
         }
     }
@@ -83,8 +83,8 @@ public final class BookingNavigationController {
     /// @param context callback-команда
     /// @param bot     бот для отправки сообщений
     public void selectBase(BookingCallback context, Bot bot) {
-        BookingFlow flow = context.flow();
-        if (stateMachine.transition(flow, BookingFlow.Event.SELECT_BASE)) {
+        BookingStep flow = context.flow();
+        if (stateMachine.transition(flow, BookingStep.Event.SELECT_BASE)) {
             flow.clearBooking();
             flow.baseId = Long.parseLong(context.part(ARGUMENT_PART));
             baseSelection.showRoomChoices(context.chatId(), flow, bot);
@@ -98,11 +98,11 @@ public final class BookingNavigationController {
     /// @param context callback-команда
     /// @param bot     бот для отправки сообщений
     public void selectRoom(BookingCallback context, Bot bot) {
-        BookingFlow flow = context.flow();
+        BookingStep flow = context.flow();
         long roomId = Long.parseLong(context.part(ARGUMENT_PART));
         if (!baseSelection.isAvailableRoom(flow.baseId, roomId)) {
             baseSelection.showRoomChoices(context.chatId(), flow, bot);
-        } else if (stateMachine.transition(flow, BookingFlow.Event.SELECT_ROOM)) {
+        } else if (stateMachine.transition(flow, BookingStep.Event.SELECT_ROOM)) {
             flow.roomId = roomId;
             flow.monthOffset = 0;
             dateSelection.showMonthChoices(context.chatId(), flow, bot);
@@ -116,8 +116,8 @@ public final class BookingNavigationController {
     /// @param context callback-команда
     /// @param bot     бот для отправки сообщений
     public void selectMonths(BookingCallback context, Bot bot) {
-        BookingFlow flow = context.flow();
-        if (stateMachine.transition(flow, BookingFlow.Event.CHANGE_MONTH_PAGE)) {
+        BookingStep flow = context.flow();
+        if (stateMachine.transition(flow, BookingStep.Event.CHANGE_MONTH_PAGE)) {
             flow.monthOffset = Integer.parseInt(context.part(ARGUMENT_PART));
             dateSelection.showMonthChoices(context.chatId(), flow, bot);
         } else {
@@ -130,8 +130,8 @@ public final class BookingNavigationController {
     /// @param context callback-команда
     /// @param bot     бот для отправки сообщений
     public void selectMonth(BookingCallback context, Bot bot) {
-        BookingFlow flow = context.flow();
-        if (stateMachine.transition(flow, BookingFlow.Event.SELECT_MONTH)) {
+        BookingStep flow = context.flow();
+        if (stateMachine.transition(flow, BookingStep.Event.SELECT_MONTH)) {
             YearMonth month = YearMonth.parse(context.part(ARGUMENT_PART));
             flow.selectedMonth = month;
             dateSelection.showWeekChoices(context.chatId(), flow, month, bot);
@@ -145,8 +145,8 @@ public final class BookingNavigationController {
     /// @param context callback-команда
     /// @param bot     бот для отправки сообщений
     public void selectWeek(BookingCallback context, Bot bot) {
-        BookingFlow flow = context.flow();
-        if (stateMachine.transition(flow, BookingFlow.Event.SELECT_WEEK)) {
+        BookingStep flow = context.flow();
+        if (stateMachine.transition(flow, BookingStep.Event.SELECT_WEEK)) {
             flow.bookingDate = LocalDate.parse(context.part(ARGUMENT_PART));
             flow.selectedWeek = flow.bookingDate;
             dateSelection.showDayChoices(context.chatId(), flow, bot);
@@ -160,8 +160,8 @@ public final class BookingNavigationController {
     /// @param context callback-команда
     /// @param bot     бот для отправки сообщений
     public void selectDay(BookingCallback context, Bot bot) {
-        BookingFlow flow = context.flow();
-        if (stateMachine.transition(flow, BookingFlow.Event.SELECT_DAY)) {
+        BookingStep flow = context.flow();
+        if (stateMachine.transition(flow, BookingStep.Event.SELECT_DAY)) {
             flow.bookingDate = LocalDate.parse(context.part(ARGUMENT_PART));
             if (flow.selectedWeek == null) {
                 flow.selectedWeek = flow.bookingDate;
@@ -177,8 +177,8 @@ public final class BookingNavigationController {
     /// @param context callback-команда
     /// @param bot     бот для отправки сообщений
     public void selectTime(BookingCallback context, Bot bot) {
-        BookingFlow flow = context.flow();
-        if (stateMachine.transition(flow, BookingFlow.Event.SELECT_TIME)) {
+        BookingStep flow = context.flow();
+        if (stateMachine.transition(flow, BookingStep.Event.SELECT_TIME)) {
             flow.bookingDate = LocalDate.parse(context.part(ARGUMENT_PART));
             flow.startHour = Integer.parseInt(context.part(HOUR_PART));
             timeSelection.showDurationChoices(context.chatId(), flow, bot);
@@ -192,8 +192,8 @@ public final class BookingNavigationController {
     /// @param context callback-команда
     /// @param bot     бот для отправки сообщений
     public void selectHours(BookingCallback context, Bot bot) {
-        BookingFlow flow = context.flow();
-        if (stateMachine.transition(flow, BookingFlow.Event.SELECT_DURATION)) {
+        BookingStep flow = context.flow();
+        if (stateMachine.transition(flow, BookingStep.Event.SELECT_DURATION)) {
             flow.hours = Integer.parseInt(context.part(ARGUMENT_PART));
             formService.promptName(context.chatId(), bot);
         } else {
@@ -206,8 +206,8 @@ public final class BookingNavigationController {
     /// @param context callback-команда
     /// @param bot     бот для отправки сообщений
     public void confirm(BookingCallback context, Bot bot) {
-        BookingFlow flow = context.flow();
-        if (stateMachine.transition(flow, BookingFlow.Event.CONFIRM_BOOKING)) {
+        BookingStep flow = context.flow();
+        if (stateMachine.transition(flow, BookingStep.Event.CONFIRM_BOOKING)) {
             boolean created = formService.confirmBooking(context.userId(), flow);
             flow.clearBooking();
             showConfirmationResult(context.chatId(), created, bot);

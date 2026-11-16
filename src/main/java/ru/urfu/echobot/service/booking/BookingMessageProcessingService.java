@@ -22,7 +22,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
     private static final long SESSION_TIMEOUT_MINUTES = 5;
 
     /// Состояния диалогов, индексированные по идентификатору пользователя.
-    private final Map<Long, BookingFlow> flows = new ConcurrentHashMap<>();
+    private final Map<Long, BookingStep> flows = new ConcurrentHashMap<>();
     /// Маршрутизатор callback-команд.
     private final BookingCallbackRouter callbackRouter;
     /// Обработчик текстовых сообщений.
@@ -51,7 +51,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
                                            Set<Long> ownerIds) {
         BookingAvailabilityService availabilityService = new BookingAvailabilityService(roomRepository,
                 bookingRepository, rules);
-        GenericStateMachine<BookingFlow.Step, BookingFlow.Event> stateMachine = createStateMachine();
+        GenericStateMachine<BookingStep.Step, BookingStep.Event> stateMachine = createStateMachine();
         BookingBaseSelectionService baseSelection = new BookingBaseSelectionService(baseRepository, roomRepository);
         BookingDateSelectionService dateSelection = new BookingDateSelectionService(baseRepository,
                 availabilityService, rules);
@@ -79,47 +79,47 @@ public final class BookingMessageProcessingService implements MessageProcessingS
     /// Создаёт автомат переходов диалога бронирования.
     ///
     /// @return общий автомат состояний
-    private GenericStateMachine<BookingFlow.Step, BookingFlow.Event> createStateMachine() {
-        Map<BookingFlow.Step, Map<BookingFlow.Event, BookingFlow.Step>> transitions = Map.ofEntries(
-                Map.entry(BookingFlow.Step.MENU, Map.of(
-                        BookingFlow.Event.BEGIN_BOOKING, BookingFlow.Step.BOOK_BASES)),
-                Map.entry(BookingFlow.Step.BOOK_BASES, Map.of(
-                        BookingFlow.Event.SELECT_BASE, BookingFlow.Step.BOOK_ROOMS,
-                        BookingFlow.Event.BACK, BookingFlow.Step.MENU)),
-                Map.entry(BookingFlow.Step.BOOK_ROOMS, Map.of(
-                        BookingFlow.Event.SELECT_ROOM, BookingFlow.Step.BOOK_MONTH,
-                        BookingFlow.Event.BACK, BookingFlow.Step.BOOK_BASES)),
-                Map.entry(BookingFlow.Step.BOOK_MONTH, Map.of(
-                        BookingFlow.Event.SELECT_MONTH, BookingFlow.Step.BOOK_WEEK,
-                        BookingFlow.Event.CHANGE_MONTH_PAGE, BookingFlow.Step.BOOK_MONTH,
-                        BookingFlow.Event.SELECT_DAY, BookingFlow.Step.BOOK_TIME,
-                        BookingFlow.Event.BACK, BookingFlow.Step.BOOK_ROOMS)),
-                Map.entry(BookingFlow.Step.BOOK_WEEK, Map.of(
-                        BookingFlow.Event.SELECT_WEEK, BookingFlow.Step.BOOK_DAY,
-                        BookingFlow.Event.BACK, BookingFlow.Step.BOOK_MONTH)),
-                Map.entry(BookingFlow.Step.BOOK_DAY, Map.of(
-                        BookingFlow.Event.SELECT_DAY, BookingFlow.Step.BOOK_TIME,
-                        BookingFlow.Event.BACK, BookingFlow.Step.BOOK_WEEK)),
-                Map.entry(BookingFlow.Step.BOOK_TIME, Map.of(
-                        BookingFlow.Event.SELECT_TIME, BookingFlow.Step.BOOK_DURATION,
-                        BookingFlow.Event.BACK, BookingFlow.Step.BOOK_DAY)),
-                Map.entry(BookingFlow.Step.BOOK_DURATION, Map.of(
-                        BookingFlow.Event.SELECT_DURATION, BookingFlow.Step.BOOK_NAME,
-                        BookingFlow.Event.BACK, BookingFlow.Step.BOOK_TIME)),
-                Map.entry(BookingFlow.Step.BOOK_NAME, Map.of(
-                        BookingFlow.Event.ENTER_NAME, BookingFlow.Step.BOOK_PHONE,
-                        BookingFlow.Event.BACK, BookingFlow.Step.BOOK_DURATION)),
-                Map.entry(BookingFlow.Step.BOOK_PHONE, Map.of(
-                        BookingFlow.Event.VALID_PHONE, BookingFlow.Step.BOOK_COMMENT,
-                        BookingFlow.Event.BACK, BookingFlow.Step.BOOK_NAME)),
-                Map.entry(BookingFlow.Step.BOOK_COMMENT, Map.of(
-                        BookingFlow.Event.ENTER_COMMENT, BookingFlow.Step.BOOK_CONFIRM,
-                        BookingFlow.Event.SKIP_COMMENT, BookingFlow.Step.BOOK_CONFIRM,
-                        BookingFlow.Event.BACK, BookingFlow.Step.BOOK_NAME)),
-                Map.entry(BookingFlow.Step.BOOK_CONFIRM, Map.of(
-                        BookingFlow.Event.CONFIRM_BOOKING, BookingFlow.Step.MENU,
-                        BookingFlow.Event.CANCEL, BookingFlow.Step.MENU,
-                        BookingFlow.Event.BACK, BookingFlow.Step.BOOK_COMMENT)));
+    private GenericStateMachine<BookingStep.Step, BookingStep.Event> createStateMachine() {
+        Map<BookingStep.Step, Map<BookingStep.Event, BookingStep.Step>> transitions = Map.ofEntries(
+                Map.entry(BookingStep.Step.MENU, Map.of(
+                        BookingStep.Event.BEGIN_BOOKING, BookingStep.Step.BOOK_BASES)),
+                Map.entry(BookingStep.Step.BOOK_BASES, Map.of(
+                        BookingStep.Event.SELECT_BASE, BookingStep.Step.BOOK_ROOMS,
+                        BookingStep.Event.BACK, BookingStep.Step.MENU)),
+                Map.entry(BookingStep.Step.BOOK_ROOMS, Map.of(
+                        BookingStep.Event.SELECT_ROOM, BookingStep.Step.BOOK_MONTH,
+                        BookingStep.Event.BACK, BookingStep.Step.BOOK_BASES)),
+                Map.entry(BookingStep.Step.BOOK_MONTH, Map.of(
+                        BookingStep.Event.SELECT_MONTH, BookingStep.Step.BOOK_WEEK,
+                        BookingStep.Event.CHANGE_MONTH_PAGE, BookingStep.Step.BOOK_MONTH,
+                        BookingStep.Event.SELECT_DAY, BookingStep.Step.BOOK_TIME,
+                        BookingStep.Event.BACK, BookingStep.Step.BOOK_ROOMS)),
+                Map.entry(BookingStep.Step.BOOK_WEEK, Map.of(
+                        BookingStep.Event.SELECT_WEEK, BookingStep.Step.BOOK_DAY,
+                        BookingStep.Event.BACK, BookingStep.Step.BOOK_MONTH)),
+                Map.entry(BookingStep.Step.BOOK_DAY, Map.of(
+                        BookingStep.Event.SELECT_DAY, BookingStep.Step.BOOK_TIME,
+                        BookingStep.Event.BACK, BookingStep.Step.BOOK_WEEK)),
+                Map.entry(BookingStep.Step.BOOK_TIME, Map.of(
+                        BookingStep.Event.SELECT_TIME, BookingStep.Step.BOOK_DURATION,
+                        BookingStep.Event.BACK, BookingStep.Step.BOOK_DAY)),
+                Map.entry(BookingStep.Step.BOOK_DURATION, Map.of(
+                        BookingStep.Event.SELECT_DURATION, BookingStep.Step.BOOK_NAME,
+                        BookingStep.Event.BACK, BookingStep.Step.BOOK_TIME)),
+                Map.entry(BookingStep.Step.BOOK_NAME, Map.of(
+                        BookingStep.Event.ENTER_NAME, BookingStep.Step.BOOK_PHONE,
+                        BookingStep.Event.BACK, BookingStep.Step.BOOK_DURATION)),
+                Map.entry(BookingStep.Step.BOOK_PHONE, Map.of(
+                        BookingStep.Event.VALID_PHONE, BookingStep.Step.BOOK_COMMENT,
+                        BookingStep.Event.BACK, BookingStep.Step.BOOK_NAME)),
+                Map.entry(BookingStep.Step.BOOK_COMMENT, Map.of(
+                        BookingStep.Event.ENTER_COMMENT, BookingStep.Step.BOOK_CONFIRM,
+                        BookingStep.Event.SKIP_COMMENT, BookingStep.Step.BOOK_CONFIRM,
+                        BookingStep.Event.BACK, BookingStep.Step.BOOK_NAME)),
+                Map.entry(BookingStep.Step.BOOK_CONFIRM, Map.of(
+                        BookingStep.Event.CONFIRM_BOOKING, BookingStep.Step.MENU,
+                        BookingStep.Event.CANCEL, BookingStep.Step.MENU,
+                        BookingStep.Event.BACK, BookingStep.Step.BOOK_COMMENT)));
         return new GenericStateMachine<>(transitions);
     }
 
@@ -131,7 +131,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
     @Override
     public void processMessage(@NotNull Message msg, long chatId, @NotNull Bot bot) {
         removeExpiredFlows();
-        BookingFlow flow = flow(chatId);
+        BookingStep flow = flow(chatId);
         if (msg.buttonData() != null) {
             callbackRouter.handle(msg.buttonData(), chatId, flow, bot);
         } else if (msg.text() != null) {
@@ -143,18 +143,18 @@ public final class BookingMessageProcessingService implements MessageProcessingS
     ///
     /// @param userId идентификатор пользователя
     /// @return состояние диалога
-    private BookingFlow flow(long userId) {
-        BookingFlow flow = flows.computeIfAbsent(userId, ignored -> new BookingFlow());
+    private BookingStep flow(long userId) {
+        BookingStep flow = flows.computeIfAbsent(userId, ignored -> new BookingStep());
         flow.updateLastActivity();
         return flow;
     }
 
     /// Удаляет диалоги, в которых не было активности дольше тайм-аута.
     private void removeExpiredFlows() {
-        Iterator<Map.Entry<Long, BookingFlow>> iterator = flows.entrySet().iterator();
+        Iterator<Map.Entry<Long, BookingStep>> iterator = flows.entrySet().iterator();
         LocalDateTime currentTime = LocalDateTime.now();
         while (iterator.hasNext()) {
-            BookingFlow flow = iterator.next().getValue();
+            BookingStep flow = iterator.next().getValue();
             long inactiveMinutes = ChronoUnit.MINUTES.between(flow.getLastActivityAt(), currentTime);
             if (inactiveMinutes >= SESSION_TIMEOUT_MINUTES) {
                 iterator.remove();

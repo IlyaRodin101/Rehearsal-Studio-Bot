@@ -113,7 +113,7 @@ public final class BookingCallbackRouter {
     /// @param chatId идентификатор чата
     /// @param flow   состояние диалога
     /// @param bot    бот для отправки сообщений
-    public void handle(String data, long chatId, BookingFlow flow, Bot bot) {
+    public void handle(String data, long chatId, BookingStep flow, Bot bot) {
         String[] parts = data.split(":");
         if (OWNER.equals(parts[0])) {
             ownerService.handleCallback(chatId, parts, bot);

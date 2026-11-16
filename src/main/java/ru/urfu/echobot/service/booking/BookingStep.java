@@ -6,7 +6,7 @@ import java.time.YearMonth;
 import ru.urfu.echobot.service.GenericStateMachine;
 
 /// Хранит шаг и введённые данные одного пользовательского диалога бронирования.
-final class BookingFlow implements GenericStateMachine.State<BookingFlow.Step> {
+final class BookingStep implements GenericStateMachine.State<BookingStep.Step> {
     /// Шаги диалога бронирования.
     enum Step {
         MENU, BOOK_BASES, BOOK_ROOMS, BOOK_MONTH, BOOK_WEEK, BOOK_DAY, BOOK_TIME, BOOK_DURATION,
@@ -77,7 +77,7 @@ final class BookingFlow implements GenericStateMachine.State<BookingFlow.Step> {
     int monthOffset;
 
     /// Создаёт состояние диалога, установленное на главное меню.
-    BookingFlow() {
+    BookingStep() {
         lastActivityAt = LocalDateTime.now();
     }
 

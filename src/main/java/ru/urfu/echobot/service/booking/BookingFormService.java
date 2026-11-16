@@ -30,7 +30,7 @@ public final class BookingFormService {
     /// Правила проверки бронирования.
     private final BookingRules rules;
     /// Автомат состояний диалога.
-    private final GenericStateMachine<BookingFlow.Step, BookingFlow.Event> stateMachine;
+    private final GenericStateMachine<BookingStep.Step, BookingStep.Event> stateMachine;
     /// Сервис комментария и подтверждения.
     private final BookingConfirmationService confirmation;
     /// Нормализатор российских номеров телефонов.
@@ -48,7 +48,7 @@ public final class BookingFormService {
     /// @param confirmation      сервис комментария и подтверждения
     public BookingFormService(BaseRepository baseRepository, RoomRepository roomRepository,
                               BookingRepository bookingRepository, BookingRules rules,
-                              GenericStateMachine<BookingFlow.Step, BookingFlow.Event> stateMachine,
+                              GenericStateMachine<BookingStep.Step, BookingStep.Event> stateMachine,
                               BookingConfirmationService confirmation) {
         this.baseRepository = baseRepository;
         this.roomRepository = roomRepository;
@@ -72,12 +72,12 @@ public final class BookingFormService {
     /// @param flow   состояние диалога
     /// @param text   введённый текст
     /// @param bot    бот для отправки сообщения
-    public void handleNameText(long chatId, BookingFlow flow, String text, Bot bot) {
+    public void handleNameText(long chatId, BookingStep flow, String text, Bot bot) {
         if (text.isEmpty()) {
             promptName(chatId, bot);
         } else {
             flow.name = text;
-            if (stateMachine.transition(flow, BookingFlow.Event.ENTER_NAME)) {
+            if (stateMachine.transition(flow, BookingStep.Event.ENTER_NAME)) {
                 promptPhone(chatId, bot);
             }
         }
@@ -97,14 +97,14 @@ public final class BookingFormService {
     /// @param flow   состояние диалога
     /// @param text   введённый номер
     /// @param bot    бот для отправки сообщения
-    public void handlePhoneText(long chatId, BookingFlow flow, String text, Bot bot) {
+    public void handlePhoneText(long chatId, BookingStep flow, String text, Bot bot) {
         Optional<String> normalizedPhone = phoneNormalizer.normalize(text);
         if (normalizedPhone.isEmpty()) {
             send(bot, chatId, "Не удалось распознать номер. Введите российский номер, например\n"
                     + "+7 999 123-45-67 или 8 999 123-45-67.", keyboards.backKeyboard());
         } else {
             flow.phone = normalizedPhone.get();
-            if (stateMachine.transition(flow, BookingFlow.Event.VALID_PHONE)) {
+            if (stateMachine.transition(flow, BookingStep.Event.VALID_PHONE)) {
                 confirmation.promptComment(chatId, flow, bot);
             }
         }
@@ -115,7 +115,7 @@ public final class BookingFormService {
     /// @param userId идентификатор пользователя
     /// @param flow   заполненное состояние диалога
     /// @return true, если бронь сохранена
-    public boolean confirmBooking(long userId, BookingFlow flow) {
+    public boolean confirmBooking(long userId, BookingStep flow) {
         LocalDateTime start = flow.bookingDate.atTime(flow.startHour, 0);
         Base base = baseRepository.findById(flow.baseId).orElse(null);
         Room room = roomRepository.findById(flow.roomId).orElse(null);
@@ -128,7 +128,7 @@ public final class BookingFormService {
     /// Удаляет все введённые клиентом сведения.
     ///
     /// @param flow состояние диалога
-    public void clearCustomerDetails(BookingFlow flow) {
+    public void clearCustomerDetails(BookingStep flow) {
         flow.name = null;
         flow.phone = null;
         flow.comment = null;
@@ -137,7 +137,7 @@ public final class BookingFormService {
     /// Очищает только номер телефона при возврате к вводу имени.
     ///
     /// @param flow состояние диалога
-    public void clearPhone(BookingFlow flow) {
+    public void clearPhone(BookingStep flow) {
         flow.phone = null;
     }
 

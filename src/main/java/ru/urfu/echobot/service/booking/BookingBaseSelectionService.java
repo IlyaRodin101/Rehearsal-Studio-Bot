@@ -48,7 +48,7 @@ public final class BookingBaseSelectionService {
     /// @param chatId идентификатор чата
     /// @param flow   состояние диалога
     /// @param bot    бот для отправки сообщения
-    public void showBaseChoices(long chatId, BookingFlow flow, Bot bot) {
+    public void showBaseChoices(long chatId, BookingStep flow, Bot bot) {
         List<Base> bases = baseRepository.findAll();
         if (bases.isEmpty()) {
             send(bot, chatId, "Пока нет доступных баз для бронирования.",
@@ -68,7 +68,7 @@ public final class BookingBaseSelectionService {
     /// @param chatId идентификатор чата
     /// @param flow   состояние диалога
     /// @param bot    бот для отправки сообщения
-    public void showRoomChoices(long chatId, BookingFlow flow, Bot bot) {
+    public void showRoomChoices(long chatId, BookingStep flow, Bot bot) {
         List<Room> rooms = roomRepository.findByBaseId(flow.baseId);
         List<List<Button>> rows = new ArrayList<>();
         for (Room room : rooms) {

@@ -24,7 +24,7 @@ public final class BookingConfirmationService {
     /// Хранилище залов.
     private final RoomRepository roomRepository;
     /// Автомат состояний диалога.
-    private final GenericStateMachine<BookingFlow.Step, BookingFlow.Event> stateMachine;
+    private final GenericStateMachine<BookingStep.Step, BookingStep.Event> stateMachine;
     /// Правила бесплатной и платной отмены.
     private final BookingRules rules;
     /// Форматер дат и времени.
@@ -38,7 +38,7 @@ public final class BookingConfirmationService {
     /// @param roomRepository хранилище залов
     /// @param stateMachine   автомат состояний диалога
     public BookingConfirmationService(BaseRepository baseRepository, RoomRepository roomRepository,
-                                      GenericStateMachine<BookingFlow.Step, BookingFlow.Event> stateMachine) {
+                                      GenericStateMachine<BookingStep.Step, BookingStep.Event> stateMachine) {
         this(baseRepository, roomRepository, stateMachine, new BookingRules(Clock.systemUTC()));
     }
 
@@ -49,7 +49,7 @@ public final class BookingConfirmationService {
     /// @param stateMachine   автомат состояний диалога
     /// @param rules          правила бесплатной и платной отмены
     public BookingConfirmationService(BaseRepository baseRepository, RoomRepository roomRepository,
-                                      GenericStateMachine<BookingFlow.Step, BookingFlow.Event> stateMachine,
+                                      GenericStateMachine<BookingStep.Step, BookingStep.Event> stateMachine,
                                       BookingRules rules) {
         this.baseRepository = baseRepository;
         this.roomRepository = roomRepository;
@@ -62,7 +62,7 @@ public final class BookingConfirmationService {
     /// @param chatId идентификатор чата
     /// @param flow   состояние диалога
     /// @param bot    бот для отправки сообщения
-    public void promptComment(long chatId, BookingFlow flow, Bot bot) {
+    public void promptComment(long chatId, BookingStep flow, Bot bot) {
         Room room = roomRepository.findById(flow.roomId).orElse(null);
         if (room == null) {
             send(bot, chatId, "Зал больше недоступен. Начните бронирование заново.",
@@ -82,14 +82,14 @@ public final class BookingConfirmationService {
     /// @param flow   состояние диалога
     /// @param text   комментарий клиента
     /// @param bot    бот для отправки сообщения
-    public void handleCommentText(long chatId, BookingFlow flow, String text, Bot bot) {
+    public void handleCommentText(long chatId, BookingStep flow, String text, Bot bot) {
         Room room = roomRepository.findById(flow.roomId).orElse(null);
         if (text.isEmpty() || (room != null && room.commentRequired() && "-".equals(text))) {
             send(bot, chatId, "Комментарий не может быть пустым. Опишите, что будете делать.",
                     keyboards.commentKeyboard());
         } else {
             flow.comment = text;
-            if (stateMachine.transition(flow, BookingFlow.Event.ENTER_COMMENT)) {
+            if (stateMachine.transition(flow, BookingStep.Event.ENTER_COMMENT)) {
                 showConfirmation(chatId, flow, bot);
             }
         }
@@ -100,10 +100,10 @@ public final class BookingConfirmationService {
     /// @param chatId идентификатор чата
     /// @param flow   состояние диалога
     /// @param bot    бот для отправки сообщения
-    public void skipBookingComment(long chatId, BookingFlow flow, Bot bot) {
+    public void skipBookingComment(long chatId, BookingStep flow, Bot bot) {
         Room room = roomRepository.findById(flow.roomId).orElse(null);
-        if (flow.step == BookingFlow.Step.BOOK_COMMENT && room != null && !room.commentRequired()
-                && stateMachine.transition(flow, BookingFlow.Event.SKIP_COMMENT)) {
+        if (flow.step == BookingStep.Step.BOOK_COMMENT && room != null && !room.commentRequired()
+                && stateMachine.transition(flow, BookingStep.Event.SKIP_COMMENT)) {
             flow.comment = "";
             showConfirmation(chatId, flow, bot);
         }
@@ -114,13 +114,13 @@ public final class BookingConfirmationService {
     /// @param chatId идентификатор чата
     /// @param flow   состояние диалога
     /// @param bot    бот для отправки сообщения
-    public void showConfirmation(long chatId, BookingFlow flow, Bot bot) {
+    public void showConfirmation(long chatId, BookingStep flow, Bot bot) {
         Base base = baseRepository.findById(flow.baseId).orElse(null);
         Room room = roomRepository.findById(flow.roomId).orElse(null);
         if (base == null || room == null
                 || (room.commentRequired() && (flow.comment == null || flow.comment.isEmpty()))) {
             send(bot, chatId, COMMENT_REQUIRED, keyboards.backKeyboard());
-            stateMachine.transition(flow, BookingFlow.Event.BACK);
+            stateMachine.transition(flow, BookingStep.Event.BACK);
         } else {
             LocalDateTime start = flow.bookingDate.atTime(flow.startHour, 0);
             LocalDateTime end = start.plusHours(flow.hours);

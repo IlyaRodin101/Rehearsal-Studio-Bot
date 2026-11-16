@@ -59,7 +59,7 @@ public final class BookingTimeSelectionService {
     /// @param chatId идентификатор чата
     /// @param flow   состояние диалога
     /// @param bot    бот для отправки сообщения
-    public void showTimeChoices(long chatId, BookingFlow flow, Bot bot) {
+    public void showTimeChoices(long chatId, BookingStep flow, Bot bot) {
         Base base = baseRepository.findById(flow.baseId).orElse(null);
         Room room = roomRepository.findById(flow.roomId).orElse(null);
         List<List<Button>> rows = new ArrayList<>();
@@ -80,7 +80,7 @@ public final class BookingTimeSelectionService {
     /// @param chatId идентификатор чата
     /// @param flow   состояние диалога
     /// @param bot    бот для отправки сообщения
-    public void showDurationChoices(long chatId, BookingFlow flow, Bot bot) {
+    public void showDurationChoices(long chatId, BookingStep flow, Bot bot) {
         Base base = baseRepository.findById(flow.baseId).orElse(null);
         OpeningHours hours = base == null ? null : base.hoursOn(flow.bookingDate.getDayOfWeek()).orElse(null);
         List<List<Button>> rows = new ArrayList<>();

@@ -29,7 +29,7 @@ public final class BookingMenuController {
     /// Фабрика клавиатур.
     private final BookingKeyboardFactory keyboards = new BookingKeyboardFactory();
     /// Автомат состояний диалога бронирования.
-    private final GenericStateMachine<BookingFlow.Step, BookingFlow.Event> stateMachine;
+    private final GenericStateMachine<BookingStep.Step, BookingStep.Event> stateMachine;
     /// Сервис выбора базы и зала.
     private final BookingBaseSelectionService baseSelection;
     /// Сервис выбора месяца, недели и дня.
@@ -41,7 +41,7 @@ public final class BookingMenuController {
     /// Сервис комментария и подтверждения.
     private final BookingConfirmationService confirmation;
     /// Обработчики возврата для каждого шага.
-    private final Map<BookingFlow.Step, Consumer<BackContext>> backHandlers;
+    private final Map<BookingStep.Step, Consumer<BackContext>> backHandlers;
 
     /// Создаёт контроллер главного меню и возврата.
     ///
@@ -53,7 +53,7 @@ public final class BookingMenuController {
     /// @param formService   форма клиента
     /// @param confirmation  комментарий и подтверждение
     public BookingMenuController(OwnerManagementService ownerService,
-                                 GenericStateMachine<BookingFlow.Step, BookingFlow.Event> stateMachine,
+                                 GenericStateMachine<BookingStep.Step, BookingStep.Event> stateMachine,
                                  BookingBaseSelectionService baseSelection,
                                  BookingDateSelectionService dateSelection,
                                  BookingTimeSelectionService timeSelection,
@@ -90,10 +90,10 @@ public final class BookingMenuController {
     /// @param chatId идентификатор чата
     /// @param flow   состояние диалога
     /// @param bot    бот для отправки сообщений
-    public void returnToMenu(long chatId, BookingFlow flow, Bot bot) {
+    public void returnToMenu(long chatId, BookingStep flow, Bot bot) {
         ownerService.cancel(chatId);
         flow.clearBooking();
-        stateMachine.reset(flow, BookingFlow.Step.MENU);
+        stateMachine.reset(flow, BookingStep.Step.MENU);
         showMainMenu(chatId, bot);
     }
 
@@ -112,7 +112,7 @@ public final class BookingMenuController {
     /// @param chatId идентификатор чата
     /// @param flow   состояние диалога
     /// @param bot    бот для отправки сообщений
-    public void back(long chatId, BookingFlow flow, Bot bot) {
+    public void back(long chatId, BookingStep flow, Bot bot) {
         Consumer<BackContext> handler = backHandlers.get(flow.step);
         if (handler == null) {
             returnToMenu(chatId, flow, bot);
@@ -123,26 +123,26 @@ public final class BookingMenuController {
 
     /// Заполняет таблицу переходов назад для всех шагов диалога.
     private void registerBackHandlers() {
-        backHandlers.put(BookingFlow.Step.MENU, context ->
+        backHandlers.put(BookingStep.Step.MENU, context ->
                 returnToMenu(context.chatId(), context.flow(), context.bot()));
-        backHandlers.put(BookingFlow.Step.BOOK_BASES, context ->
+        backHandlers.put(BookingStep.Step.BOOK_BASES, context ->
                 returnToMenu(context.chatId(), context.flow(), context.bot()));
-        backHandlers.put(BookingFlow.Step.BOOK_ROOMS, context -> previous(context,
+        backHandlers.put(BookingStep.Step.BOOK_ROOMS, context -> previous(context,
                 () -> baseSelection.showBaseChoices(context.chatId(), context.flow(), context.bot())));
-        backHandlers.put(BookingFlow.Step.BOOK_MONTH, context -> previous(context,
+        backHandlers.put(BookingStep.Step.BOOK_MONTH, context -> previous(context,
                 () -> baseSelection.showRoomChoices(context.chatId(), context.flow(), context.bot())));
-        backHandlers.put(BookingFlow.Step.BOOK_WEEK, context -> previous(context,
+        backHandlers.put(BookingStep.Step.BOOK_WEEK, context -> previous(context,
                 () -> dateSelection.showMonthChoices(context.chatId(), context.flow(), context.bot())));
-        backHandlers.put(BookingFlow.Step.BOOK_DAY, context -> previous(context,
+        backHandlers.put(BookingStep.Step.BOOK_DAY, context -> previous(context,
                 () -> dateSelection.showWeekChoices(context.chatId(), context.flow(),
                         context.flow().selectedMonth, context.bot())));
-        backHandlers.put(BookingFlow.Step.BOOK_TIME, context -> previous(context,
+        backHandlers.put(BookingStep.Step.BOOK_TIME, context -> previous(context,
                 () -> dateSelection.showDayChoices(context.chatId(), context.flow(), context.bot())));
-        backHandlers.put(BookingFlow.Step.BOOK_DURATION, this::backFromDuration);
-        backHandlers.put(BookingFlow.Step.BOOK_NAME, this::backFromName);
-        backHandlers.put(BookingFlow.Step.BOOK_PHONE, this::backToName);
-        backHandlers.put(BookingFlow.Step.BOOK_COMMENT, this::backToName);
-        backHandlers.put(BookingFlow.Step.BOOK_CONFIRM, context -> previous(context,
+        backHandlers.put(BookingStep.Step.BOOK_DURATION, this::backFromDuration);
+        backHandlers.put(BookingStep.Step.BOOK_NAME, this::backFromName);
+        backHandlers.put(BookingStep.Step.BOOK_PHONE, this::backToName);
+        backHandlers.put(BookingStep.Step.BOOK_COMMENT, this::backToName);
+        backHandlers.put(BookingStep.Step.BOOK_CONFIRM, context -> previous(context,
                 () -> confirmation.promptComment(context.chatId(), context.flow(), context.bot())));
     }
 
@@ -175,7 +175,7 @@ public final class BookingMenuController {
     /// @param context контекст возврата
     /// @param render  отрисовка предыдущего шага
     private void previous(BackContext context, Runnable render) {
-        if (stateMachine.transition(context.flow(), BookingFlow.Event.BACK)) {
+        if (stateMachine.transition(context.flow(), BookingStep.Event.BACK)) {
             render.run();
         } else {
             returnToMenu(context.chatId(), context.flow(), context.bot());
@@ -197,6 +197,6 @@ public final class BookingMenuController {
     /// @param chatId идентификатор чата
     /// @param flow   состояние диалога
     /// @param bot    бот для отправки сообщений
-    private record BackContext(long chatId, BookingFlow flow, Bot bot) {
+    private record BackContext(long chatId, BookingStep flow, Bot bot) {
     }
 }

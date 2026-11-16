@@ -58,7 +58,7 @@ public final class BookingDateSelectionService {
     /// @param chatId идентификатор чата
     /// @param flow   состояние диалога
     /// @param bot    бот для отправки сообщения
-    public void showMonthChoices(long chatId, BookingFlow flow, Bot bot) {
+    public void showMonthChoices(long chatId, BookingStep flow, Bot bot) {
         Base base = baseRepository.findById(flow.baseId).orElse(null);
         if (base == null) {
             sendUnavailable(chatId, bot);
@@ -86,7 +86,7 @@ public final class BookingDateSelectionService {
     /// @param flow   состояние диалога
     /// @param month  выбранный месяц
     /// @param bot    бот для отправки сообщения
-    public void showWeekChoices(long chatId, BookingFlow flow, YearMonth month, Bot bot) {
+    public void showWeekChoices(long chatId, BookingStep flow, YearMonth month, Bot bot) {
         Base base = baseRepository.findById(flow.baseId).orElse(null);
         if (base == null) {
             sendUnavailable(chatId, bot);
@@ -113,7 +113,7 @@ public final class BookingDateSelectionService {
     /// @param chatId идентификатор чата
     /// @param flow   состояние диалога
     /// @param bot    бот для отправки сообщения
-    public void showDayChoices(long chatId, BookingFlow flow, Bot bot) {
+    public void showDayChoices(long chatId, BookingStep flow, Bot bot) {
         Base base = baseRepository.findById(flow.baseId).orElse(null);
         if (base == null) {
             sendUnavailable(chatId, bot);
@@ -136,7 +136,7 @@ public final class BookingDateSelectionService {
     ///
     /// @param rows строки клавиатуры
     /// @param flow состояние диалога
-    private void addMonthNavigation(List<List<Button>> rows, BookingFlow flow) {
+    private void addMonthNavigation(List<List<Button>> rows, BookingStep flow) {
         List<Button> navigation = new ArrayList<>();
         if (flow.monthOffset > 0) {
             navigation.add(keyboards.button("Предыдущие", BOOK_MONTHS
