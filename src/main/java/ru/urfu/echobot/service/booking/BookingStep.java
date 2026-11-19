@@ -123,20 +123,4 @@ final class BookingStep implements GenericStateMachine.State<BookingStep.Step> {
         selectedWeek = null;
         monthOffset = 0;
     }
-
-    /// Начинает бронирование выбранного «горячего» слота с шага длительности.
-    ///
-    /// @param baseId база слота
-    /// @param roomId зал слота
-    /// @param start  время начала слота
-    void startHotSlot(long baseId, long roomId, LocalDateTime start) {
-        clearBooking();
-        this.baseId = baseId;
-        this.roomId = roomId;
-        bookingDate = start.toLocalDate();
-        startHour = start.getHour();
-        selectedMonth = YearMonth.from(start);
-        selectedWeek = start.toLocalDate();
-        step = Step.BOOK_DURATION;
-    }
 }

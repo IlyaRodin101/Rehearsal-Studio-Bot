@@ -19,10 +19,6 @@ public final class BookingMenuController {
     private static final String MENU_MINE = "menu:mine";
     /// Callback раздела «О базе».
     private static final String MENU_ABOUT = "menu:about";
-    /// Callback раздела «Горячие слоты».
-    private static final String MENU_HOT = "menu:hot";
-    /// Callback раздела «Подписка».
-    private static final String MENU_SUB = "menu:sub";
     /// Callback раздела управления базами владельца.
     private static final String MENU_BASES = "menu:bases";
     /// Текст главного меню.
@@ -81,9 +77,8 @@ public final class BookingMenuController {
     public void showMainMenu(long chatId, Bot bot) {
         List<List<Button>> rows = new ArrayList<>();
         rows.add(keyboards.row(keyboards.button("Забронировать", MENU_BOOK),
-                keyboards.button("Мои записи", MENU_MINE), keyboards.button("О базе", MENU_ABOUT)));
-        rows.add(keyboards.row(keyboards.button("Горячие слоты", MENU_HOT),
-                keyboards.button("Подписка", MENU_SUB)));
+                keyboards.button("Мои записи", MENU_MINE)));
+        rows.add(keyboards.row(keyboards.button("О базе", MENU_ABOUT)));
         if (ownerService.isOwner(chatId)) {
             rows.add(keyboards.row(keyboards.button("Базы", MENU_BASES)));
         }

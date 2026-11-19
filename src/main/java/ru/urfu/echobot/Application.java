@@ -16,7 +16,6 @@ import ru.urfu.echobot.repository.SqliteBaseRepository;
 import ru.urfu.echobot.repository.SqliteBookingRepository;
 import ru.urfu.echobot.repository.SqliteDatabase;
 import ru.urfu.echobot.repository.SqliteRoomRepository;
-import ru.urfu.echobot.repository.SqliteSubscriptionRepository;
 import ru.urfu.echobot.service.booking.BookingMessageProcessingService;
 import ru.urfu.echobot.service.booking.BookingRules;
 import ru.urfu.echobot.service.MessageProcessingService;
@@ -69,8 +68,7 @@ final class Application {
                 new SqliteRoomRepository(database),
                 new SqliteBookingRepository(database),
                 new BookingRules(Clock.systemUTC()),
-                parseOwnerIds(configuration.get(OWNER_IDS)),
-                new SqliteSubscriptionRepository(database));
+                parseOwnerIds(configuration.get(OWNER_IDS)));
     }
 
     /// Возвращает путь к файлу базы данных.

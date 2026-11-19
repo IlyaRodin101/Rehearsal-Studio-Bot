@@ -14,9 +14,7 @@ import ru.urfu.echobot.service.owner.OwnerManagementService;
 import ru.urfu.echobot.bot.Bot;
 import ru.urfu.echobot.repository.BaseRepository;
 import ru.urfu.echobot.repository.BookingRepository;
-import ru.urfu.echobot.repository.InMemorySubscriptionRepository;
 import ru.urfu.echobot.repository.RoomRepository;
-import ru.urfu.echobot.repository.SubscriptionRepository;
 
 /// Принимает сообщения Telegram, хранит диалоги пользователей и передаёт их контроллерам.
 public final class BookingMessageProcessingService implements MessageProcessingService {
@@ -51,21 +49,6 @@ public final class BookingMessageProcessingService implements MessageProcessingS
     public BookingMessageProcessingService(BaseRepository baseRepository, RoomRepository roomRepository,
                                            BookingRepository bookingRepository, BookingRules rules,
                                            Set<Long> ownerIds) {
-        this(baseRepository, roomRepository, bookingRepository, rules, ownerIds,
-                new InMemorySubscriptionRepository());
-    }
-
-    /// Создаёт обработчик сообщений с хранилищем подписок.
-    ///
-    /// @param baseRepository         репозиторий баз
-    /// @param roomRepository         репозиторий залов
-    /// @param bookingRepository      репозиторий бронирований
-    /// @param rules                  правила бронирования
-    /// @param ownerIds               Telegram ID владельцев баз
-    /// @param subscriptionRepository хранилище подписок
-    public BookingMessageProcessingService(BaseRepository baseRepository, RoomRepository roomRepository,
-                                           BookingRepository bookingRepository, BookingRules rules,
-                                           Set<Long> ownerIds, SubscriptionRepository subscriptionRepository) {
         BookingAvailabilityService availabilityService = new BookingAvailabilityService(roomRepository,
                 bookingRepository, rules);
         GenericStateMachine<BookingStep.Step, BookingStep.Event> stateMachine = createStateMachine();
@@ -79,10 +62,8 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         BookingFormService formService = new BookingFormService(baseRepository, roomRepository,
                 bookingRepository, rules, stateMachine, confirmation);
         BookingLookup lookup = new BookingLookup(baseRepository, roomRepository, bookingRepository, rules);
-        HotSlotService hotSlotService = new HotSlotService(roomRepository, bookingRepository, rules);
-        HotSlotNotifier notifier = new SubscriptionHotSlotNotifier(subscriptionRepository, rules);
         BookingCancellationService cancellationService = new BookingCancellationService(lookup,
-                bookingRepository, rules, notifier);
+                bookingRepository, rules);
         BaseInformationService baseInformation = new BaseInformationService(baseRepository);
         OwnerManagementService ownerService = new OwnerManagementService(baseRepository, roomRepository, ownerIds);
         BookingMenuController menuController = new BookingMenuController(ownerService, stateMachine,
@@ -90,15 +71,8 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         BookingNavigationController navigation = new BookingNavigationController(baseSelection, dateSelection,
                 timeSelection, formService, menuController, stateMachine, confirmation);
         BookingClientController clientController = new BookingClientController(lookup, cancellationService);
-        BookingKeyboardFactory keyboards = new BookingKeyboardFactory();
-        HotSlotController hotSlotController = new HotSlotController(baseRepository, roomRepository,
-                hotSlotService, timeSelection, menuController, keyboards, rules);
-        SubscriptionService subscriptionService = new SubscriptionService(subscriptionRepository);
-        SubscriptionController subscriptionController = new SubscriptionController(baseRepository,
-                subscriptionService, menuController, keyboards);
         callbackRouter = new BookingCallbackRouter(ownerService, menuController, navigation,
                 clientController, baseInformation);
-        callbackRouter.registerHotSlots(hotSlotController, subscriptionController);
         textController = new BookingTextController(ownerService, menuController, formService, confirmation);
     }
 
