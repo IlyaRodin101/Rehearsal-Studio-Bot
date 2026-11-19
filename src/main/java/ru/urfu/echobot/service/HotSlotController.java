@@ -1,7 +1,6 @@
 package ru.urfu.echobot.service;
 
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import ru.urfu.echobot.bot.Bot;
@@ -17,8 +16,6 @@ public final class HotSlotController {
     private static final int ARGUMENT_PART = 2;
     /// Позиция ключа времени начала в callback-данных.
     private static final int START_PART = 3;
-    /// Формат времени начала в callback-кнопках.
-    private static final String CALLBACK_PATTERN = "uuuuMMddHHmm";
     /// Действие со списком баз.
     private static final String BASES = "bases";
     /// Действие выбора базы.
@@ -52,12 +49,8 @@ public final class HotSlotController {
     private final BookingMenuController menuController;
     /// Фабрика клавиатур.
     private final BookingKeyboardFactory keyboards;
-    /// Правила бронирования.
-    private final BookingRules rules;
-    /// Форматер дат и времени.
-    private final RussianDateFormatter formatter = new RussianDateFormatter();
-    /// Формат времени начала в callback-кнопках.
-    private final DateTimeFormatter callbackFormat = DateTimeFormatter.ofPattern(CALLBACK_PATTERN);
+    /// Форматер подписей и callback-ключей слотов.
+    private final HotSlotFormatter formatter;
 
     /// Создаёт контроллер «горячих» слотов.
     ///
@@ -78,7 +71,7 @@ public final class HotSlotController {
         this.timeSelection = timeSelection;
         this.menuController = menuController;
         this.keyboards = keyboards;
-        this.rules = rules;
+        this.formatter = new HotSlotFormatter(rules);
     }
 
     /// Показывает список баз для выбора «горячих» слотов.
@@ -137,10 +130,8 @@ public final class HotSlotController {
         List<HotSlot> slots = hotSlotService.findHotSlots(base);
         List<List<Button>> rows = new ArrayList<>();
         for (HotSlot slot : slots) {
-            String text = slot.room().name() + ", " + formatter.relativeDate(slot.start().toLocalDate(),
-                    rules.today(base)) + ", " + formatter.timeRange(slot.start(), slot.end());
-            keyboards.addButton(rows, keyboards.button(text, "hot:book:" + slot.room().id() + ":"
-                    + slot.start().format(callbackFormat)), 1);
+            keyboards.addButton(rows, keyboards.button(formatter.label(base, slot), "hot:book:"
+                    + slot.room().id() + ":" + formatter.startKey(slot.start())), 1);
         }
         rows.add(keyboards.row(keyboards.button(BACK, BASES_CALLBACK)));
         String text = slots.isEmpty() ? NO_SLOTS : "«Горячие» слоты базы «" + base.name() + "»:";
@@ -154,7 +145,12 @@ public final class HotSlotController {
     private void book(BookingCallback context, Bot bot) {
         Room room = findRoom(context);
         Base base = room == null ? null : baseRepository.findById(room.baseId()).orElse(null);
-        LocalDateTime start = parseStart(context);
+        LocalDateTime start;
+        try {
+            start = formatter.parseStart(context.part(START_PART));
+        } catch (RuntimeException exception) {
+            start = null;
+        }
         if (base != null && start != null && hotSlotService.isAvailable(base, room, start)) {
             context.flow().startHotSlot(base.id(), room.id(), start);
             timeSelection.showDurationChoices(context.chatId(), context.flow(), bot);
@@ -184,18 +180,6 @@ public final class HotSlotController {
         try {
             return roomRepository.findById(Long.parseLong(context.part(ARGUMENT_PART))).orElse(null);
         } catch (NumberFormatException exception) {
-            return null;
-        }
-    }
-
-    /// Возвращает время начала из callback-команды или null, если оно некорректно.
-    ///
-    /// @param context callback-команда
-    /// @return время начала или null
-    private LocalDateTime parseStart(BookingCallback context) {
-        try {
-            return LocalDateTime.parse(context.part(START_PART), callbackFormat);
-        } catch (RuntimeException exception) {
             return null;
         }
     }

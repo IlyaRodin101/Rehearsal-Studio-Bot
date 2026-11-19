@@ -104,6 +104,15 @@ final class HotSlotFlowTest {
         assertTrue(lastButtons().stream().noneMatch(text -> text.startsWith("✓")));
     }
 
+    /// Given: клиент открывает главное меню. When: меню показано. Then: кнопки идут в порядке задания.
+    @Test
+    void mainMenuShowsHotSlotsAndSubscription() {
+        type(CLIENT, "/start");
+
+        assertEquals(List.of("Забронировать", "Мои записи", "О базе", "Горячие слоты", "Подписка"),
+                lastButtons());
+    }
+
     /// Отправляет сервису нажатие кнопки.
     ///
     /// @param user клиент
