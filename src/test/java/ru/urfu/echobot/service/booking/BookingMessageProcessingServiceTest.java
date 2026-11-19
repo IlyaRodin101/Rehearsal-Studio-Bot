@@ -126,7 +126,8 @@ final class BookingMessageProcessingServiceTest {
     void startShowsMainMenuButtons() {
         type(CLIENT, "/start");
 
-        assertEquals(List.of("Забронировать", "Мои записи", "О базе"), lastButtons());
+        assertEquals(List.of("Забронировать", "Мои записи", "О базе", "Горячие слоты", "Подписка"),
+                lastButtons());
     }
 
     /// Owners retain the client menu and receive the additional base-management button.
@@ -141,7 +142,8 @@ final class BookingMessageProcessingServiceTest {
 
         ownerService.processMessage(new Message("/start", null, List.of()), CLIENT, bot);
 
-        assertTrue(lastButtons().containsAll(List.of("Забронировать", "Мои записи", "О базе", "Базы")));
+        assertTrue(lastButtons().containsAll(List.of("Забронировать", "Мои записи", "О базе",
+                "Горячие слоты", "Подписка", "Базы")));
     }
 
     /// Given: клиент проходит весь диалог. When: подтверждает бронь. Then: запись создана и видна в «Мои записи».
@@ -313,7 +315,8 @@ final class BookingMessageProcessingServiceTest {
         press(CLIENT, "menu:book");
         press(CLIENT, "back");
 
-        assertEquals(List.of("Забронировать", "Мои записи", "О базе"), lastButtons());
+        assertEquals(List.of("Забронировать", "Мои записи", "О базе", "Горячие слоты", "Подписка"),
+                lastButtons());
     }
 
     /// Проверяет, что при старте в 23:00 длительность ограничена одним часом до закрытия в 24:00.
