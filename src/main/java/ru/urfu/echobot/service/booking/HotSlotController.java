@@ -81,7 +81,7 @@ public final class HotSlotController {
     /// @param chatId идентификатор чата
     /// @param flow   состояние диалога
     /// @param bot    бот для отправки сообщений
-    public void showBaseList(long chatId, BookingStep flow, Bot bot) {
+    void showBaseList(long chatId, BookingStep flow, Bot bot) {
         flow.clearBooking();
         flow.step = BookingStep.Step.MENU;
         List<Base> bases = baseRepository.findAll();
@@ -101,7 +101,7 @@ public final class HotSlotController {
     ///
     /// @param context callback-команда
     /// @param bot     бот для отправки сообщений
-    public void handle(BookingCallback context, Bot bot) {
+    void handle(BookingCallback context, Bot bot) {
         switch (context.action()) {
             case BASES:
                 showBaseList(context.chatId(), context.flow(), bot);

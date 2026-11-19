@@ -75,7 +75,7 @@ public final class SubscriptionController {
     ///
     /// @param context callback-команда
     /// @param bot     бот для отправки сообщений
-    public void handle(BookingCallback context, Bot bot) {
+    void handle(BookingCallback context, Bot bot) {
         switch (context.action()) {
             case LIST:
                 showList(context.chatId(), context.userId(), bot);
