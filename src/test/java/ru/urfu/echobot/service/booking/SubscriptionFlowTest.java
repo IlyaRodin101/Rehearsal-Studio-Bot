@@ -92,6 +92,29 @@ final class SubscriptionFlowTest {
         assertFalse(lastButtons().contains("✓ Центр"));
     }
 
+    /// Given: подписан только один клиент базы. When: другой клиент отменяет бронь.
+    /// Then: уведомление получает только подписчик.
+    @Test
+    void cancellationNotifiesOnlySubscriberOfTheBase() {
+        subscriptions.subscribe(SUBSCRIBER, base.id());
+        bookings.addIfFree(new Booking(room.id(), CLIENT, LocalDateTime.of(2026, 10, 21, 18, 0), 2,
+                "Анна", "+79990000000", ""));
+
+        press(CLIENT, "menu:mine");
+        String cancel = lastButtonsData().stream().filter(data -> data.startsWith("mine:cancel:"))
+                .findFirst().orElseThrow();
+        press(CLIENT, cancel);
+        String confirm = lastButtonsData().stream().filter(data -> data.startsWith("mine:cancelyes:"))
+                .findFirst().orElseThrow();
+        press(CLIENT, confirm);
+
+        assertTrue(bookings.findByUser(CLIENT).isEmpty());
+        assertTrue(bot.messagesTo(SUBSCRIBER).stream().anyMatch(message ->
+                message.text() != null && message.text().startsWith("«Горячий» слот: база «Центр»")));
+        assertTrue(bot.messagesTo(CLIENT).stream().noneMatch(message ->
+                message.text() != null && message.text().startsWith("«Горячий» слот:")));
+    }
+
     /// Given: два клиента одновременно подписываются. When: Освобождается слот. Then: уведомления получают оба.
     @Test
     void simultaneousClientsSubscribeAndReceiveNotifications() throws Exception {

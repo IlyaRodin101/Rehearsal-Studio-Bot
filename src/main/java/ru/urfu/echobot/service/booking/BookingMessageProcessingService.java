@@ -80,8 +80,9 @@ public final class BookingMessageProcessingService implements MessageProcessingS
                 bookingRepository, rules, stateMachine, confirmation);
         BookingLookup lookup = new BookingLookup(baseRepository, roomRepository, bookingRepository, rules);
         HotSlotService hotSlotService = new HotSlotService(roomRepository, bookingRepository, rules);
+        HotSlotNotifier notifier = new SubscriptionHotSlotNotifier(subscriptionRepository, rules);
         BookingCancellationService cancellationService = new BookingCancellationService(lookup,
-                bookingRepository, rules);
+                bookingRepository, rules, notifier);
         BaseInformationService baseInformation = new BaseInformationService(baseRepository);
         OwnerManagementService ownerService = new OwnerManagementService(baseRepository, roomRepository, ownerIds);
         BookingMenuController menuController = new BookingMenuController(ownerService, stateMachine,
