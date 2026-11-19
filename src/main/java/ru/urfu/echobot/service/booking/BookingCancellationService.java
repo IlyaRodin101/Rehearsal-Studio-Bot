@@ -38,6 +38,8 @@ public final class BookingCancellationService {
     private final RussianDateFormatter formatter = new RussianDateFormatter();
     /// Правила бесплатной и платной отмены.
     private final BookingRules rules;
+    /// Рассылка уведомлений подписчикам.
+    private final HotSlotNotifier notifier;
     /// Фабрика клавиатур.
     private final BookingKeyboardFactory keyboards = new BookingKeyboardFactory();
 
@@ -46,19 +48,33 @@ public final class BookingCancellationService {
     /// @param lookup            поиск будущих записей
     /// @param bookingRepository хранилище броней
     public BookingCancellationService(BookingLookup lookup, BookingRepository bookingRepository) {
-        this(lookup, bookingRepository, new BookingRules(Clock.systemUTC()));
+        this(lookup, bookingRepository, new BookingRules(Clock.systemUTC()), (base, room, booking, bot) -> {
+        });
     }
 
-    /// Создаёт сервис отмены записей.
+    /// Создаёт сервис отмены записей без рассылки подписчикам.
     ///
     /// @param lookup            поиск будущих записей
     /// @param bookingRepository хранилище броней
     /// @param rules             правила бесплатной и платной отмены
     public BookingCancellationService(BookingLookup lookup, BookingRepository bookingRepository,
                                       BookingRules rules) {
+        this(lookup, bookingRepository, rules, (base, room, booking, bot) -> {
+        });
+    }
+
+    /// Создаёт сервис отмены записей с рассылкой подписчикам.
+    ///
+    /// @param lookup            поиск будущих записей
+    /// @param bookingRepository хранилище броней
+    /// @param rules             правила бесплатной и платной отмены
+    /// @param notifier          рассылка уведомлений подписчикам
+    public BookingCancellationService(BookingLookup lookup, BookingRepository bookingRepository,
+                                      BookingRules rules, HotSlotNotifier notifier) {
         this.lookup = lookup;
         this.bookingRepository = bookingRepository;
         this.rules = rules;
+        this.notifier = notifier;
     }
 
     /// Просит клиента подтвердить отмену его будущей записи.
@@ -102,6 +118,9 @@ public final class BookingCancellationService {
             send(bot, chatId, TIME_IS_FREE, List.of());
         }
         notifyOwner(booking, free, bot);
+        if (rules.isHotSlot(booking.base(), booking.booking().start())) {
+            notifier.notifySubscribers(booking.base(), booking.room(), booking.booking(), bot);
+        }
         return true;
     }
 
