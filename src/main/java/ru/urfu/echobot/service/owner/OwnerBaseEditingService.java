@@ -1,0 +1,222 @@
+package ru.urfu.echobot.service.owner;
+
+import ru.urfu.echobot.service.GenericStateMachine;
+import java.time.DateTimeException;
+import java.time.ZoneId;
+import ru.urfu.echobot.bot.Bot;
+import ru.urfu.echobot.model.Base;
+import ru.urfu.echobot.model.Room;
+
+/// Редактирует поля выбранной базы и её залов.
+final class OwnerBaseEditingService {
+    /// Сообщение о неверном часовом поясе.
+    private static final String INVALID_TIMEZONE = "Неверный формат часового пояса. Пример: Europe/Moscow.";
+    /// Сообщение о пустом значении.
+    private static final String EMPTY_VALUE = "Значение не может быть пустым.";
+    /// Сообщение об пустом названии зала.
+    private static final String EMPTY_ROOM_NAME = "Название зала не может быть пустым.";
+    /// Текст запроса оборудования.
+    private static final String ASK_EQUIPMENT = "Введите список оборудования (можно оставить пустым).";
+    /// Минимальный срок бронирования.
+    private static final int MIN_LEAD_HOURS = 1;
+    /// Максимальный срок бронирования.
+    private static final int MAX_LEAD_HOURS = 48;
+
+    /// Сессии владельцев.
+    private final OwnerSessions sessions;
+    /// Проверка прав и принадлежности.
+    private final OwnerAccess access;
+    /// Сообщения и клавиатуры.
+    private final OwnerMessaging messaging;
+    /// Автомат состояний.
+    private final GenericStateMachine<OwnerSession.Step, OwnerSession.Event> stateMachine;
+    /// Основные операции с базами.
+    private final OwnerBaseService baseService;
+    /// Операции с залами.
+    private final OwnerRoomService roomService;
+
+    /// Создаёт сервис редактирования.
+    ///
+    /// @param sessions     сессии владельцев
+    /// @param access       проверка прав
+    /// @param messaging    сообщения и клавиатуры
+    /// @param stateMachine автомат состояний
+    /// @param baseService  основные операции с базами
+    /// @param roomService  операции с залами
+    OwnerBaseEditingService(OwnerSessions sessions, OwnerAccess access, OwnerMessaging messaging,
+                            GenericStateMachine<OwnerSession.Step, OwnerSession.Event> stateMachine,
+                            OwnerBaseService baseService, OwnerRoomService roomService) {
+        this.sessions = sessions;
+        this.access = access;
+        this.messaging = messaging;
+        this.stateMachine = stateMachine;
+        this.baseService = baseService;
+        this.roomService = roomService;
+    }
+
+    /// Начинает редактирование поля базы.
+    ///
+    /// @param userId идентификатор владельца
+    /// @param field  имя поля
+    /// @param bot    бот для отправки
+    void beginEdit(long userId, String field, Bot bot) {
+        OwnerSession session = sessions.get(userId);
+        Base base = access.selectedBase(userId, session, bot);
+        if (base != null) {
+            if ("lead".equals(field)) {
+                messaging.showLeadHours(userId, bot);
+            } else {
+                startTextEdit(userId, field, bot);
+            }
+        }
+    }
+
+    /// Выбирает срок бронирования для новой или существующей базы.
+    ///
+    /// @param userId идентификатор владельца
+    /// @param hours  срок в часах
+    /// @param bot    бот для отправки
+    void selectLeadHours(long userId, int hours, Bot bot) {
+        OwnerSession session = sessions.get(userId);
+        boolean valid = hours >= MIN_LEAD_HOURS && hours <= MAX_LEAD_HOURS;
+        if (session.step == OwnerSession.Step.CREATE_LEAD && valid
+                && stateMachine.transition(session, OwnerSession.Event.ENTER_LEAD)) {
+            session.leadHours = hours;
+            messaging.send(bot, userId, ASK_EQUIPMENT, messaging.backKeyboard());
+        } else if (valid) {
+            updateExistingBase(userId, session, hours, bot);
+        } else {
+            baseService.unavailable(userId, bot);
+        }
+    }
+
+    /// Сохраняет новый срок бронирования существующей базы.
+    ///
+    /// @param userId  идентификатор владельца
+    /// @param session сессия владельца
+    /// @param hours   срок в часах
+    /// @param bot     бот для отправки
+    private void updateExistingBase(long userId, OwnerSession session, int hours, Bot bot) {
+        Base base = access.selectedBase(userId, session, bot);
+        if (base != null) {
+            baseService.updateBase(userId, baseService.copy(base, base.name(), base.address(), base.timezone(),
+                    hours, base.equipment(), base.openingHours()));
+            baseService.showBaseMenu(userId, bot);
+        }
+    }
+
+    /// Сохраняет отредактированное текстовое значение.
+    ///
+    /// @param userId идентификатор владельца
+    /// @param text   введённый текст
+    /// @param bot    бот для отправки
+    void handleEditText(long userId, String text, Bot bot) {
+        OwnerSession session = sessions.get(userId);
+        String value = text.trim();
+        if (session.step == OwnerSession.Step.ROOM_EDIT_NAME) {
+            saveRoomName(userId, session, value, bot);
+        } else {
+            saveBaseField(userId, session, text, value, bot);
+        }
+    }
+
+    /// Сохраняет новое название зала.
+    ///
+    /// @param userId  идентификатор владельца
+    /// @param session сессия владельца
+    /// @param value   новое название
+    /// @param bot     бот для отправки
+    private void saveRoomName(long userId, OwnerSession session, String value, Bot bot) {
+        Room room = access.activeOwnedRoom(userId, session, session.selectedRoomId, bot);
+        if (value.isEmpty()) {
+            messaging.send(bot, userId, EMPTY_ROOM_NAME, messaging.backKeyboard());
+        } else if (room != null && stateMachine.transition(session, OwnerSession.Event.SAVE_TEXT)) {
+            roomService.renameRoom(room, value);
+            roomService.selectRoom(userId, room.id(), bot);
+        }
+    }
+
+    /// Сохраняет отредактированное поле базы.
+    ///
+    /// @param userId  идентификатор владельца
+    /// @param session сессия владельца
+    /// @param text    исходный текст
+    /// @param value   текст без внешних пробелов
+    /// @param bot     бот для отправки
+    private void saveBaseField(long userId, OwnerSession session, String text, String value, Bot bot) {
+        Base base = access.selectedBase(userId, session, bot);
+        String timezone = editedTimezone(userId, session, value, bot);
+        if (base == null || timezone == null || !validBaseValue(userId, session, value, bot)) {
+            return;
+        }
+        Base edited = baseService.copy(base,
+                session.step == OwnerSession.Step.EDIT_NAME ? value : base.name(),
+                session.step == OwnerSession.Step.EDIT_ADDRESS ? value : base.address(),
+                session.step == OwnerSession.Step.EDIT_TIMEZONE ? timezone : base.timezone(),
+                base.bookingLeadHours(),
+                session.step == OwnerSession.Step.EDIT_EQUIPMENT ? text : base.equipment(),
+                base.openingHours());
+        if (stateMachine.transition(session, OwnerSession.Event.SAVE_TEXT)) {
+            baseService.updateBase(userId, edited);
+            baseService.showBaseMenu(userId, bot);
+        }
+    }
+
+    /// Проверяет и нормализует часовой пояс.
+    ///
+    /// @param userId  идентификатор владельца
+    /// @param session сессия владельца
+    /// @param value   введённый часовой пояс
+    /// @param bot     бот для отправки
+    /// @return нормализованный пояс или null, если он не нужен или неверен
+    private String editedTimezone(long userId, OwnerSession session, String value, Bot bot) {
+        String timezone = value;
+        if (session.step == OwnerSession.Step.EDIT_TIMEZONE) {
+            try {
+                timezone = ZoneId.of(value).getId();
+            } catch (DateTimeException exception) {
+                messaging.send(bot, userId, INVALID_TIMEZONE, messaging.backKeyboard());
+                timezone = null;
+            }
+        }
+        return timezone;
+    }
+
+    /// Проверяет, что обязательное текстовое значение не пустое.
+    ///
+    /// @param userId  идентификатор владельца
+    /// @param session сессия владельца
+    /// @param value   введённое значение
+    /// @param bot     бот для отправки
+    /// @return true, если значение допустимо
+    private boolean validBaseValue(long userId, OwnerSession session, String value, Bot bot) {
+        boolean empty = value.isEmpty() && session.step != OwnerSession.Step.EDIT_EQUIPMENT;
+        if (empty) {
+            messaging.send(bot, userId, EMPTY_VALUE, messaging.backKeyboard());
+        }
+        return !empty;
+    }
+
+    /// Переводит сессию к редактированию текстового поля.
+    ///
+    /// @param userId идентификатор владельца
+    /// @param field  имя поля
+    /// @param bot    бот для отправки
+    private void startTextEdit(long userId, String field, Bot bot) {
+        OwnerSession session = sessions.get(userId);
+        if ("name".equals(field)
+                && stateMachine.transition(session, OwnerSession.Event.EDIT_NAME)) {
+            messaging.send(bot, userId, "Введите новое название базы.", messaging.backKeyboard());
+        } else if ("address".equals(field)
+                && stateMachine.transition(session, OwnerSession.Event.EDIT_ADDRESS)) {
+            messaging.send(bot, userId, "Введите новый адрес базы.", messaging.backKeyboard());
+        } else if ("timezone".equals(field)
+                && stateMachine.transition(session, OwnerSession.Event.EDIT_TIMEZONE)) {
+            messaging.send(bot, userId, "Введите новый часовой пояс базы. Например: Europe/Moscow.",
+                    messaging.backKeyboard());
+        } else if ("equipment".equals(field)
+                && stateMachine.transition(session, OwnerSession.Event.EDIT_EQUIPMENT)) {
+            messaging.send(bot, userId, ASK_EQUIPMENT, messaging.backKeyboard());
+        }
+    }
+}

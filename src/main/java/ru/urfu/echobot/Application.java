@@ -16,8 +16,8 @@ import ru.urfu.echobot.repository.SqliteBaseRepository;
 import ru.urfu.echobot.repository.SqliteBookingRepository;
 import ru.urfu.echobot.repository.SqliteDatabase;
 import ru.urfu.echobot.repository.SqliteRoomRepository;
-import ru.urfu.echobot.service.BookingMessageProcessingService;
-import ru.urfu.echobot.service.BookingRules;
+import ru.urfu.echobot.service.booking.BookingMessageProcessingService;
+import ru.urfu.echobot.service.booking.BookingRules;
 import ru.urfu.echobot.service.MessageProcessingService;
 
 /// Собирает зависимости приложения и запускает Telegram-бота.

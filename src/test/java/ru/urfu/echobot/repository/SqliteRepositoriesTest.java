@@ -6,6 +6,9 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.Statement;
 import java.time.DayOfWeek;
 import java.time.LocalDateTime;
 import java.util.EnumMap;
@@ -56,6 +59,38 @@ final class SqliteRepositoriesTest {
         assertEquals(base, new SqliteBaseRepository(reopened).findById(base.id()).orElseThrow());
         assertEquals(room, new SqliteRoomRepository(reopened).findById(room.id()).orElseThrow());
         assertEquals(1, new SqliteBookingRepository(reopened).findByUser(201).size());
+    }
+
+    @Test
+    void cancellationRulesSurviveRepositoryRecreation() {
+        Map<DayOfWeek, OpeningHours> schedule = Map.of(DayOfWeek.MONDAY, new OpeningHours(9, 24));
+        Base saved = bases.save(new Base(0, 101, "Центр", "Ленина, 1", "Europe/Moscow",
+                2, "", schedule, 24, 50));
+
+        SqliteDatabase reopened = new SqliteDatabase(temporaryDirectory.resolve("bookings.db").toString());
+        Base loaded = new SqliteBaseRepository(reopened).findById(saved.id()).orElseThrow();
+
+        assertEquals(24, loaded.freeCancellationHours());
+        assertEquals(50, loaded.penaltyPercent());
+    }
+
+    @Test
+    void oldDatabaseGetsDefaultCancellationRules() throws Exception {
+        Path path = temporaryDirectory.resolve("old.db");
+        try (Connection connection = DriverManager.getConnection("jdbc:sqlite:" + path);
+             Statement statement = connection.createStatement()) {
+            statement.execute("CREATE TABLE bases (id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                    + "owner_id INTEGER NOT NULL, name TEXT NOT NULL, address TEXT NOT NULL, "
+                    + "timezone TEXT NOT NULL, booking_lead_hours INTEGER NOT NULL, equipment TEXT NOT NULL)");
+            statement.execute("INSERT INTO bases(owner_id,name,address,timezone,booking_lead_hours,equipment) "
+                    + "VALUES(101,'Старая','Адрес','Europe/Moscow',2,'')");
+        }
+
+        SqliteDatabase migrated = new SqliteDatabase(path.toString());
+        Base loaded = new SqliteBaseRepository(migrated).findById(1).orElseThrow();
+
+        assertEquals(48, loaded.freeCancellationHours());
+        assertEquals(100, loaded.penaltyPercent());
     }
 
     @Test
