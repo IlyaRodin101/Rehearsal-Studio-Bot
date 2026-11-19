@@ -95,6 +95,30 @@ public final class RussianDateFormatter {
         return date.getDayOfWeek().getDisplayName(TextStyle.SHORT, russian) + ", " + shortDate(date);
     }
 
+    /// Форматирует дату словами «сегодня», «завтра» или короткой датой.
+    ///
+    /// @param date  форматируемая дата
+    /// @param today сегодняшняя дата по часовому поясу базы
+    /// @return «сегодня», «завтра» или строка вида «24 окт.»
+    public String relativeDate(@NotNull LocalDate date, @NotNull LocalDate today) {
+        if (date.equals(today)) {
+            return "сегодня";
+        }
+        if (date.equals(today.plusDays(1))) {
+            return "завтра";
+        }
+        return shortDate(date);
+    }
+
+    /// Форматирует промежуток времени брони.
+    ///
+    /// @param start начало брони
+    /// @param end   окончание брони
+    /// @return строка вида «20:00-22:00»
+    public String timeRange(@NotNull LocalDateTime start, @NotNull LocalDateTime end) {
+        return hour(start.getHour()) + "-" + endTime(start, end);
+    }
+
     /// Возвращает сокращённое название дня недели.
     ///
     /// @param day день недели
