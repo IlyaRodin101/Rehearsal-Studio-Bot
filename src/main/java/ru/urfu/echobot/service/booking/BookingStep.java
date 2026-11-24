@@ -3,10 +3,10 @@ package ru.urfu.echobot.service.booking;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
-import ru.urfu.echobot.service.GenericStateMachine;
+import ru.urfu.echobot.service.State;
 
 /// Хранит шаг и введённые данные одного пользовательского диалога бронирования.
-final class BookingStep implements GenericStateMachine.State<BookingStep.Step> {
+final class BookingStep implements State<BookingStep.Step> {
     /// Шаги диалога бронирования.
     enum Step {
         MENU, BOOK_BASES, BOOK_ROOMS, BOOK_MONTH, BOOK_WEEK, BOOK_DAY, BOOK_TIME, BOOK_DURATION,

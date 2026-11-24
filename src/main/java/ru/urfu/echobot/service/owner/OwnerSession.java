@@ -7,10 +7,10 @@ import java.util.List;
 import java.util.Map;
 import ru.urfu.echobot.model.OpeningHours;
 import ru.urfu.echobot.model.Room;
-import ru.urfu.echobot.service.GenericStateMachine;
+import ru.urfu.echobot.service.State;
 
 /// Хранит незавершённую форму и выбранные объекты одного владельца базы.
-final class OwnerSession implements GenericStateMachine.State<OwnerSession.Step> {
+final class OwnerSession implements State<OwnerSession.Step> {
     /// Шаги диалога владельца базы.
     enum Step {
         /// Владелец не заполняет форму.

@@ -31,7 +31,7 @@ final class GenericStateMachineTest {
     }
 
     /// Хранитель состояния тестового автомата.
-    private final class Holder implements GenericStateMachine.State<Step> {
+    private final class Holder implements State<Step> {
         /// Текущее состояние.
         private Step step;
 

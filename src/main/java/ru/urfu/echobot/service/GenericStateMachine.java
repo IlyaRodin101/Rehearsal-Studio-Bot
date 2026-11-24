@@ -53,19 +53,4 @@ public final class GenericStateMachine<S, E> {
         Objects.requireNonNull(holder, HOLDER);
         holder.state(Objects.requireNonNull(initial, "initial"));
     }
-
-    /// Изменяемое состояние, которым управляет автомат.
-    ///
-    /// @param <S> тип состояния
-    public interface State<S> {
-        /// Возвращает текущее состояние.
-        ///
-        /// @return текущее состояние
-        S state();
-
-        /// Устанавливает новое состояние.
-        ///
-        /// @param value новое состояние
-        void state(S value);
-    }
 }
