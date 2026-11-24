@@ -14,7 +14,6 @@ import ru.urfu.echobot.service.owner.OwnerManagementService;
 import ru.urfu.echobot.bot.Bot;
 import ru.urfu.echobot.repository.BaseRepository;
 import ru.urfu.echobot.repository.BookingRepository;
-import ru.urfu.echobot.repository.InMemorySubscriptionRepository;
 import ru.urfu.echobot.repository.RoomRepository;
 import ru.urfu.echobot.repository.SubscriptionRepository;
 
@@ -29,31 +28,6 @@ public final class BookingMessageProcessingService implements MessageProcessingS
     private final BookingCallbackRouter callbackRouter;
     /// Обработчик текстовых сообщений.
     private final BookingTextController textController;
-
-    /// Создаёт обработчик сообщений без владельцев баз.
-    ///
-    /// @param baseRepository    репозиторий баз
-    /// @param roomRepository    репозиторий залов
-    /// @param bookingRepository репозиторий бронирований
-    /// @param rules             правила бронирования
-    public BookingMessageProcessingService(BaseRepository baseRepository, RoomRepository roomRepository,
-                                           BookingRepository bookingRepository, BookingRules rules) {
-        this(baseRepository, roomRepository, bookingRepository, rules, Set.of());
-    }
-
-    /// Создаёт обработчик сообщений с указанными владельцами баз.
-    ///
-    /// @param baseRepository    репозиторий баз
-    /// @param roomRepository    репозиторий залов
-    /// @param bookingRepository репозиторий бронирований
-    /// @param rules             правила бронирования
-    /// @param ownerIds          Telegram ID владельцев баз
-    public BookingMessageProcessingService(BaseRepository baseRepository, RoomRepository roomRepository,
-                                           BookingRepository bookingRepository, BookingRules rules,
-                                           Set<Long> ownerIds) {
-        this(baseRepository, roomRepository, bookingRepository, rules, ownerIds,
-                new InMemorySubscriptionRepository());
-    }
 
     /// Создаёт обработчик сообщений с хранилищем подписок.
     ///

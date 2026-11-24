@@ -11,6 +11,7 @@ import java.time.ZoneOffset;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -22,6 +23,7 @@ import ru.urfu.echobot.repository.SqliteBaseRepository;
 import ru.urfu.echobot.repository.SqliteBookingRepository;
 import ru.urfu.echobot.repository.SqliteDatabase;
 import ru.urfu.echobot.repository.SqliteRoomRepository;
+import ru.urfu.echobot.repository.SqliteSubscriptionRepository;
 import ru.urfu.echobot.service.Button;
 import ru.urfu.echobot.service.Message;
 
@@ -61,7 +63,7 @@ final class BookingCancellationRulesTest {
                 "Europe/Moscow", 2, "Барабаны", schedule));
         roomRepository.save(new Room(0, center.id(), "Зал 1", false));
         service = new BookingMessageProcessingService(baseRepository, roomRepository, bookingRepository,
-                new BookingRules(clock));
+                new BookingRules(clock), Set.of(), new SqliteSubscriptionRepository(database));
         bot = new DummyBot();
     }
 
