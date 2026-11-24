@@ -27,7 +27,7 @@ final class OwnerBaseCreationService {
     /// Сообщения и клавиатуры.
     private final OwnerMessaging messaging;
     /// Автомат состояний.
-    private final GenericStateMachine<OwnerSession.Step, OwnerSession.Event> stateMachine;
+    private final GenericStateMachine<OwnerState, OwnerEvent> stateMachine;
     /// Хранилище баз.
     private final BaseRepository baseRepository;
     /// Хранилище залов.
@@ -47,7 +47,7 @@ final class OwnerBaseCreationService {
     /// @param baseService    основные операции с базами
     /// @param draftSchedule  черновик графика
     OwnerBaseCreationService(OwnerSessions sessions, OwnerMessaging messaging,
-                             GenericStateMachine<OwnerSession.Step, OwnerSession.Event> stateMachine,
+                             GenericStateMachine<OwnerState, OwnerEvent> stateMachine,
                              BaseRepository baseRepository, RoomRepository roomRepository,
                              OwnerBaseService baseService, OwnerDraftScheduleService draftSchedule) {
         this.sessions = sessions;
@@ -66,7 +66,7 @@ final class OwnerBaseCreationService {
     void beginCreate(long userId, Bot bot) {
         OwnerSession session = sessions.get(userId);
         session.reset();
-        if (stateMachine.transition(session, OwnerSession.Event.BEGIN_CREATE)) {
+        if (stateMachine.transition(session, OwnerEvent.BEGIN_CREATE)) {
             messaging.send(bot, userId, ASK_NAME, messaging.backKeyboard());
         }
     }
@@ -80,7 +80,7 @@ final class OwnerBaseCreationService {
         OwnerSession session = sessions.get(userId);
         if (text.isBlank()) {
             messaging.send(bot, userId, ASK_NAME, messaging.backKeyboard());
-        } else if (stateMachine.transition(session, OwnerSession.Event.ENTER_BASE_NAME)) {
+        } else if (stateMachine.transition(session, OwnerEvent.ENTER_BASE_NAME)) {
             session.name = text.trim();
             messaging.send(bot, userId, ASK_ADDRESS, messaging.backKeyboard());
         }
@@ -95,7 +95,7 @@ final class OwnerBaseCreationService {
         OwnerSession session = sessions.get(userId);
         if (text.isBlank()) {
             messaging.send(bot, userId, ASK_ADDRESS, messaging.backKeyboard());
-        } else if (stateMachine.transition(session, OwnerSession.Event.ENTER_BASE_ADDRESS)) {
+        } else if (stateMachine.transition(session, OwnerEvent.ENTER_BASE_ADDRESS)) {
             session.address = text.trim();
             promptTimezone(userId, bot);
         }
@@ -111,11 +111,11 @@ final class OwnerBaseCreationService {
         if ("default".equals(choice)) {
             session.timezone = DEFAULT_TIMEZONE;
             session.day = 1;
-            if (stateMachine.transition(session, OwnerSession.Event.USE_DEFAULT_TIMEZONE)) {
+            if (stateMachine.transition(session, OwnerEvent.USE_DEFAULT_TIMEZONE)) {
                 draftSchedule.promptOpening(userId, bot);
             }
         } else if ("change".equals(choice)
-                && stateMachine.transition(session, OwnerSession.Event.ENTER_CUSTOM_TIMEZONE)) {
+                && stateMachine.transition(session, OwnerEvent.ENTER_CUSTOM_TIMEZONE)) {
             messaging.send(bot, userId, ASK_TIMEZONE, messaging.backKeyboard());
         } else {
             baseService.unavailable(userId, bot);
@@ -131,7 +131,7 @@ final class OwnerBaseCreationService {
         OwnerSession session = sessions.get(userId);
         try {
             String timezone = ZoneId.of(text).getId();
-            if (stateMachine.transition(session, OwnerSession.Event.ENTER_TIMEZONE)) {
+            if (stateMachine.transition(session, OwnerEvent.ENTER_TIMEZONE)) {
                 session.timezone = timezone;
                 session.day = 1;
                 draftSchedule.promptOpening(userId, bot);
@@ -150,7 +150,7 @@ final class OwnerBaseCreationService {
     void handleEquipment(long userId, String text, Bot bot) {
         OwnerSession session = sessions.get(userId);
         session.equipment = text;
-        if (stateMachine.transition(session, OwnerSession.Event.ENTER_EQUIPMENT)) {
+        if (stateMachine.transition(session, OwnerEvent.ENTER_EQUIPMENT)) {
             saveNewBase(userId, bot);
         }
     }

@@ -33,7 +33,7 @@ public final class BookingMenuController {
     /// Фабрика клавиатур.
     private final BookingKeyboardFactory keyboards = new BookingKeyboardFactory();
     /// Автомат состояний диалога бронирования.
-    private final GenericStateMachine<BookingStep.Step, BookingStep.Event> stateMachine;
+    private final GenericStateMachine<BookingState, BookingEvent> stateMachine;
     /// Сервис выбора базы и зала.
     private final BookingBaseSelectionService baseSelection;
     /// Сервис выбора месяца, недели и дня.
@@ -45,7 +45,7 @@ public final class BookingMenuController {
     /// Сервис комментария и подтверждения.
     private final BookingConfirmationService confirmation;
     /// Обработчики возврата для каждого шага.
-    private final Map<BookingStep.Step, Consumer<BackContext>> backHandlers;
+    private final Map<BookingState, Consumer<BackContext>> backHandlers;
 
     /// Создаёт контроллер главного меню и возврата.
     ///
@@ -57,7 +57,7 @@ public final class BookingMenuController {
     /// @param formService   форма клиента
     /// @param confirmation  комментарий и подтверждение
     public BookingMenuController(OwnerManagementService ownerService,
-                                 GenericStateMachine<BookingStep.Step, BookingStep.Event> stateMachine,
+                                 GenericStateMachine<BookingState, BookingEvent> stateMachine,
                                  BookingBaseSelectionService baseSelection,
                                  BookingDateSelectionService dateSelection,
                                  BookingTimeSelectionService timeSelection,
@@ -98,7 +98,7 @@ public final class BookingMenuController {
     public void returnToMenu(long chatId, BookingStep flow, Bot bot) {
         ownerService.cancel(chatId);
         flow.clearBooking();
-        stateMachine.reset(flow, BookingStep.Step.MENU);
+        stateMachine.reset(flow, BookingState.MENU);
         showMainMenu(chatId, bot);
     }
 
@@ -128,26 +128,26 @@ public final class BookingMenuController {
 
     /// Заполняет таблицу переходов назад для всех шагов диалога.
     private void registerBackHandlers() {
-        backHandlers.put(BookingStep.Step.MENU, context ->
+        backHandlers.put(BookingState.MENU, context ->
                 returnToMenu(context.chatId(), context.flow(), context.bot()));
-        backHandlers.put(BookingStep.Step.BOOK_BASES, context ->
+        backHandlers.put(BookingState.BOOK_BASES, context ->
                 returnToMenu(context.chatId(), context.flow(), context.bot()));
-        backHandlers.put(BookingStep.Step.BOOK_ROOMS, context -> previous(context,
+        backHandlers.put(BookingState.BOOK_ROOMS, context -> previous(context,
                 () -> baseSelection.showBaseChoices(context.chatId(), context.flow(), context.bot())));
-        backHandlers.put(BookingStep.Step.BOOK_MONTH, context -> previous(context,
+        backHandlers.put(BookingState.BOOK_MONTH, context -> previous(context,
                 () -> baseSelection.showRoomChoices(context.chatId(), context.flow(), context.bot())));
-        backHandlers.put(BookingStep.Step.BOOK_WEEK, context -> previous(context,
+        backHandlers.put(BookingState.BOOK_WEEK, context -> previous(context,
                 () -> dateSelection.showMonthChoices(context.chatId(), context.flow(), context.bot())));
-        backHandlers.put(BookingStep.Step.BOOK_DAY, context -> previous(context,
+        backHandlers.put(BookingState.BOOK_DAY, context -> previous(context,
                 () -> dateSelection.showWeekChoices(context.chatId(), context.flow(),
                         context.flow().selectedMonth, context.bot())));
-        backHandlers.put(BookingStep.Step.BOOK_TIME, context -> previous(context,
+        backHandlers.put(BookingState.BOOK_TIME, context -> previous(context,
                 () -> dateSelection.showDayChoices(context.chatId(), context.flow(), context.bot())));
-        backHandlers.put(BookingStep.Step.BOOK_DURATION, this::backFromDuration);
-        backHandlers.put(BookingStep.Step.BOOK_NAME, this::backFromName);
-        backHandlers.put(BookingStep.Step.BOOK_PHONE, this::backToName);
-        backHandlers.put(BookingStep.Step.BOOK_COMMENT, this::backToName);
-        backHandlers.put(BookingStep.Step.BOOK_CONFIRM, context -> previous(context,
+        backHandlers.put(BookingState.BOOK_DURATION, this::backFromDuration);
+        backHandlers.put(BookingState.BOOK_NAME, this::backFromName);
+        backHandlers.put(BookingState.BOOK_PHONE, this::backToName);
+        backHandlers.put(BookingState.BOOK_COMMENT, this::backToName);
+        backHandlers.put(BookingState.BOOK_CONFIRM, context -> previous(context,
                 () -> confirmation.promptComment(context.chatId(), context.flow(), context.bot())));
     }
 
@@ -180,7 +180,7 @@ public final class BookingMenuController {
     /// @param context контекст возврата
     /// @param render  отрисовка предыдущего шага
     private void previous(BackContext context, Runnable render) {
-        if (stateMachine.transition(context.flow(), BookingStep.Event.BACK)) {
+        if (stateMachine.transition(context.flow(), BookingEvent.BACK)) {
             render.run();
         } else {
             returnToMenu(context.chatId(), context.flow(), context.bot());

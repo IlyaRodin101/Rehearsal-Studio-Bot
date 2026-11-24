@@ -6,53 +6,11 @@ import java.time.YearMonth;
 import ru.urfu.echobot.service.State;
 
 /// Хранит шаг и введённые данные одного пользовательского диалога бронирования.
-final class BookingStep implements State<BookingStep.Step> {
-    /// Шаги диалога бронирования.
-    enum Step {
-        MENU, BOOK_BASES, BOOK_ROOMS, BOOK_MONTH, BOOK_WEEK, BOOK_DAY, BOOK_TIME, BOOK_DURATION,
-        BOOK_NAME, BOOK_PHONE, BOOK_COMMENT, BOOK_CONFIRM
-    }
-
-    /// События, вызывающие переход между шагами бронирования.
-    enum Event {
-        /// Клиент открыл сценарий бронирования.
-        BEGIN_BOOKING,
-        /// Клиент выбрал базу.
-        SELECT_BASE,
-        /// Клиент выбрал зал.
-        SELECT_ROOM,
-        /// Клиент выбрал месяц.
-        SELECT_MONTH,
-        /// Клиент переключил страницу месяцев.
-        CHANGE_MONTH_PAGE,
-        /// Клиент выбрал неделю.
-        SELECT_WEEK,
-        /// Клиент выбрал день.
-        SELECT_DAY,
-        /// Клиент выбрал время начала.
-        SELECT_TIME,
-        /// Клиент выбрал длительность.
-        SELECT_DURATION,
-        /// Клиент ввёл имя.
-        ENTER_NAME,
-        /// Клиент ввёл корректный телефон.
-        VALID_PHONE,
-        /// Клиент ввёл комментарий.
-        ENTER_COMMENT,
-        /// Клиент пропустил необязательный комментарий.
-        SKIP_COMMENT,
-        /// Клиент подтвердил бронирование.
-        CONFIRM_BOOKING,
-        /// Клиент вернулся на предыдущий шаг.
-        BACK,
-        /// Клиент отменил бронирование.
-        CANCEL
-    }
-
+final class BookingStep implements State<BookingState> {
     /// время последней активности пользователя
     private LocalDateTime lastActivityAt;
     /// Текущий шаг диалога.
-    Step step = Step.MENU;
+    BookingState step = BookingState.MENU;
     /// Идентификатор выбранной базы.
     long baseId;
     /// Идентификатор выбранного зала.
@@ -85,7 +43,7 @@ final class BookingStep implements State<BookingStep.Step> {
     ///
     /// @return текущий шаг
     @Override
-    public Step state() {
+    public BookingState state() {
         return step;
     }
 
@@ -93,7 +51,7 @@ final class BookingStep implements State<BookingStep.Step> {
     ///
     /// @param value новый шаг
     @Override
-    public void state(Step value) {
+    public void state(BookingState value) {
         step = value;
     }
 
@@ -137,6 +95,6 @@ final class BookingStep implements State<BookingStep.Step> {
         startHour = start.getHour();
         selectedMonth = YearMonth.from(start);
         selectedWeek = start.toLocalDate();
-        step = Step.BOOK_DURATION;
+        step = BookingState.BOOK_DURATION;
     }
 }
