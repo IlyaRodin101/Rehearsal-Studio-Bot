@@ -85,7 +85,8 @@ final class BookingCancellationRulesTest {
         assertTrue(bot.messages().stream().anyMatch(message -> message.text() != null
                 && message.text().startsWith("Клиент отменил запись с неустойкой 100%:")));
         assertTrue(bot.messages().stream().anyMatch(message -> message.text() != null
-                && message.text().contains("Анна") && message.text().contains("+79991234567")));
+                && message.text().contains("Анна") && message.text().contains("+79991234567")
+                && message.text().contains("Telegram ID: " + CLIENT)));
         assertTrue(bookingRepository.findByUser(CLIENT).isEmpty());
     }
 

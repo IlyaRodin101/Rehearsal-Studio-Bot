@@ -202,7 +202,8 @@ final class BookingMessageProcessingServiceTest {
 
         assertTrue(bot.messages().stream().anyMatch(m -> "Запись отменена.".equals(m.text())));
         assertTrue(bot.messages().stream().anyMatch(m -> m.text() != null
-                && m.text().startsWith("Клиент отменил запись бесплатно:")));
+                && m.text().startsWith("Клиент отменил запись бесплатно:")
+                && m.text().contains("Telegram ID: " + CLIENT)));
         assertEquals("У вас пока нет будущих записей.", lastText());
     }
 
