@@ -10,6 +10,8 @@ import org.jetbrains.annotations.NotNull;
 import ru.urfu.echobot.service.GenericStateMachine;
 import ru.urfu.echobot.service.Message;
 import ru.urfu.echobot.service.MessageProcessingService;
+import ru.urfu.echobot.service.StaffAccess;
+import ru.urfu.echobot.service.UserDirectory;
 import ru.urfu.echobot.service.owner.OwnerManagementService;
 import ru.urfu.echobot.bot.Bot;
 import ru.urfu.echobot.repository.BaseRepository;
@@ -29,6 +31,8 @@ public final class BookingMessageProcessingService implements MessageProcessingS
     private final BookingCallbackRouter callbackRouter;
     /// Обработчик текстовых сообщений.
     private final BookingTextController textController;
+    /// Справочник пользователей, которые писали боту.
+    private final UserDirectory userDirectory;
 
     /// Создаёт обработчик сообщений без владельцев баз.
     ///
@@ -38,7 +42,8 @@ public final class BookingMessageProcessingService implements MessageProcessingS
     /// @param rules             правила бронирования
     public BookingMessageProcessingService(BaseRepository baseRepository, RoomRepository roomRepository,
                                            BookingRepository bookingRepository, BookingRules rules) {
-        this(baseRepository, roomRepository, bookingRepository, rules, Set.of());
+        this(baseRepository, roomRepository, bookingRepository, rules, Set.of(),
+                new InMemorySubscriptionRepository(), UserDirectory.inMemory());
     }
 
     /// Создаёт обработчик сообщений с указанными владельцами баз.
@@ -52,7 +57,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
                                            BookingRepository bookingRepository, BookingRules rules,
                                            Set<Long> ownerIds) {
         this(baseRepository, roomRepository, bookingRepository, rules, ownerIds,
-                new InMemorySubscriptionRepository());
+                new InMemorySubscriptionRepository(), UserDirectory.inMemory());
     }
 
     /// Создаёт обработчик сообщений с хранилищем подписок.
@@ -66,25 +71,45 @@ public final class BookingMessageProcessingService implements MessageProcessingS
     public BookingMessageProcessingService(BaseRepository baseRepository, RoomRepository roomRepository,
                                            BookingRepository bookingRepository, BookingRules rules,
                                            Set<Long> ownerIds, SubscriptionRepository subscriptionRepository) {
+        this(baseRepository, roomRepository, bookingRepository, rules, ownerIds, subscriptionRepository,
+                UserDirectory.inMemory());
+    }
+
+    /// Создаёт обработчик сообщений с постоянным справочником пользователей.
+    ///
+    /// @param baseRepository         репозиторий баз
+    /// @param roomRepository         репозиторий залов
+    /// @param bookingRepository      репозиторий бронирований
+    /// @param rules                  правила бронирования
+    /// @param ownerIds               Telegram ID владельцев баз
+    /// @param subscriptionRepository хранилище подписок
+    /// @param userDirectory          справочник известных пользователей и администраторов
+    public BookingMessageProcessingService(BaseRepository baseRepository, RoomRepository roomRepository,
+                                           BookingRepository bookingRepository, BookingRules rules,
+                                           Set<Long> ownerIds, SubscriptionRepository subscriptionRepository,
+                                           UserDirectory userDirectory) {
+        this.userDirectory = userDirectory;
+        StaffAccess staffAccess = new StaffAccess(ownerIds, userDirectory);
         BookingAvailabilityService availabilityService = new BookingAvailabilityService(roomRepository,
                 bookingRepository, rules);
         GenericStateMachine<BookingStep.Step, BookingStep.Event> stateMachine = createStateMachine();
         BookingBaseSelectionService baseSelection = new BookingBaseSelectionService(baseRepository, roomRepository);
         BookingDateSelectionService dateSelection = new BookingDateSelectionService(baseRepository,
-                availabilityService, rules);
+                availabilityService, rules, staffAccess);
         BookingTimeSelectionService timeSelection = new BookingTimeSelectionService(baseRepository,
-                roomRepository, bookingRepository, availabilityService);
+                roomRepository, bookingRepository, availabilityService, staffAccess);
         BookingConfirmationService confirmation = new BookingConfirmationService(baseRepository,
                 roomRepository, stateMachine, rules);
         BookingFormService formService = new BookingFormService(baseRepository, roomRepository,
-                bookingRepository, rules, stateMachine, confirmation);
+                bookingRepository, rules, stateMachine, confirmation, staffAccess);
         BookingLookup lookup = new BookingLookup(baseRepository, roomRepository, bookingRepository, rules);
         HotSlotService hotSlotService = new HotSlotService(roomRepository, bookingRepository, rules);
         HotSlotNotifier notifier = new SubscriptionHotSlotNotifier(subscriptionRepository, rules);
         BookingCancellationService cancellationService = new BookingCancellationService(lookup,
                 bookingRepository, rules, notifier);
         BaseInformationService baseInformation = new BaseInformationService(baseRepository);
-        OwnerManagementService ownerService = new OwnerManagementService(baseRepository, roomRepository, ownerIds);
+        OwnerManagementService ownerService = new OwnerManagementService(baseRepository, roomRepository,
+                ownerIds, userDirectory);
         BookingMenuController menuController = new BookingMenuController(ownerService, stateMachine,
                 baseSelection, dateSelection, timeSelection, formService, confirmation);
         BookingNavigationController navigation = new BookingNavigationController(baseSelection, dateSelection,
@@ -156,6 +181,9 @@ public final class BookingMessageProcessingService implements MessageProcessingS
     /// @param bot    бот для отправки ответов
     @Override
     public void processMessage(@NotNull Message msg, long chatId, @NotNull Bot bot) {
+        if (msg.username() != null) {
+            userDirectory.remember(chatId, msg.username());
+        }
         removeExpiredFlows();
         BookingStep flow = flow(chatId);
         if (msg.buttonData() != null) {

@@ -11,6 +11,7 @@ import java.util.List;
 import ru.urfu.echobot.bot.Bot;
 import ru.urfu.echobot.model.Base;
 import ru.urfu.echobot.repository.BaseRepository;
+import ru.urfu.echobot.service.StaffAccess;
 
 /// Показывает кнопки выбора месяца, недели и дня бронирования.
 public final class BookingDateSelectionService {
@@ -35,6 +36,8 @@ public final class BookingDateSelectionService {
     private final BookingAvailabilityService availabilityService;
     /// Правила бронирования.
     private final BookingRules rules;
+    /// Права владельцев и администраторов.
+    private final StaffAccess staffAccess;
     /// Фабрика клавиатур.
     private final BookingKeyboardFactory keyboards = new BookingKeyboardFactory();
     /// Форматер дат.
@@ -45,12 +48,14 @@ public final class BookingDateSelectionService {
     /// @param baseRepository      хранилище баз
     /// @param availabilityService проверка доступности
     /// @param rules               правила бронирования
+    /// @param staffAccess         права владельцев и администраторов
     public BookingDateSelectionService(BaseRepository baseRepository,
                                        BookingAvailabilityService availabilityService,
-                                       BookingRules rules) {
+                                       BookingRules rules, StaffAccess staffAccess) {
         this.baseRepository = baseRepository;
         this.availabilityService = availabilityService;
         this.rules = rules;
+        this.staffAccess = staffAccess;
     }
 
     /// Показывает месяцы, в которых есть доступное время.
@@ -69,7 +74,8 @@ public final class BookingDateSelectionService {
         int count = 0;
         for (int offset = 0; offset < MONTHS_PER_PAGE; offset++) {
             YearMonth month = current.plusMonths(flow.monthOffset + offset);
-            if (availabilityService.monthHasAvailability(base, flow.roomId, month)) {
+            if (availabilityService.monthHasAvailability(base, flow.roomId, month,
+                    staffAccess.isStaff(chatId))) {
                 keyboards.addButton(rows, keyboards.button(formatter.monthYear(month), BOOK_MONTH + month), 2);
                 count++;
             }
@@ -97,7 +103,8 @@ public final class BookingDateSelectionService {
         List<List<Button>> rows = new ArrayList<>();
         while (cursor.getMonthValue() == month.getMonthValue()) {
             LocalDate end = weekEnd(cursor, month.atEndOfMonth());
-            if (availabilityService.rangeHasAvailability(base, flow.roomId, cursor, end)) {
+            if (availabilityService.rangeHasAvailability(base, flow.roomId, cursor, end,
+                    staffAccess.isStaff(chatId))) {
                 keyboards.addButton(rows, keyboards.button(formatter.weekRange(cursor, end), BOOK_WEEK + cursor), 2);
                 count++;
             }
@@ -123,7 +130,8 @@ public final class BookingDateSelectionService {
         LocalDate end = weekEnd(start, start.withDayOfMonth(start.lengthOfMonth()));
         List<List<Button>> rows = new ArrayList<>();
         for (LocalDate date = start; !date.isAfter(end); date = date.plusDays(1)) {
-            if (availabilityService.dateHasAvailability(base, flow.roomId, date)) {
+            if (availabilityService.dateHasAvailability(base, flow.roomId, date,
+                    staffAccess.isStaff(chatId))) {
                 keyboards.addButton(rows, keyboards.button(formatter.dayAndDate(date), BOOK_DAY + date), 2);
             }
         }

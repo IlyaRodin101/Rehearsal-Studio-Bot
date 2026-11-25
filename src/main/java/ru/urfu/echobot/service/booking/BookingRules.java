@@ -31,13 +31,35 @@ public final class BookingRules {
     /// @param hours длительность в часах
     /// @return true, если бронь укладывается в часы работы и создаётся не позже допустимого срока
     public boolean canBook(@NotNull Base base, @NotNull LocalDateTime start, int hours) {
+        return canBook(base, start, hours, false);
+    }
+
+    /// Проверяет, можно ли забронировать зал, не учитывая срок бронирования при необходимости.
+    ///
+    /// @param base           база, в которой находится зал
+    /// @param start          время начала по часовому поясу базы
+    /// @param hours          длительность в часах
+    /// @param ignoreLeadTime true, чтобы не проверять срок до начала брони
+    /// @return true, если бронь укладывается в часы работы и, когда требуется, создаётся не позже срока
+    public boolean canBook(@NotNull Base base, @NotNull LocalDateTime start, int hours, boolean ignoreLeadTime) {
         Optional<OpeningHours> opening = base.hoursOn(start.getDayOfWeek());
         if (opening.isEmpty() || hours < 1) {
             return false;
         }
         boolean insideWorkingHours = start.getHour() >= opening.get().openHour()
                 && start.getHour() + hours <= opening.get().closeHour();
-        return insideWorkingHours && !start.atZone(zone(base)).isBefore(earliestStart(base));
+        ZonedDateTime startAt = start.atZone(zone(base));
+        boolean notInPast = !startAt.isBefore(now(base));
+        return insideWorkingHours && notInPast
+                && (ignoreLeadTime || !startAt.isBefore(earliestStart(base)));
+    }
+
+    /// Возвращает текущий момент по часовому поясу базы.
+    ///
+    /// @param base база
+    /// @return текущее время в городе базы
+    public ZonedDateTime now(@NotNull Base base) {
+        return ZonedDateTime.now(clock.withZone(zone(base)));
     }
 
     /// Возвращает самый ранний момент, на который сейчас ещё можно забронировать.

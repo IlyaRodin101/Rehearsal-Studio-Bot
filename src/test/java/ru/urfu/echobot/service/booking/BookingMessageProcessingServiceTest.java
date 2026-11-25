@@ -22,12 +22,14 @@ import ru.urfu.echobot.model.Base;
 import ru.urfu.echobot.model.Booking;
 import ru.urfu.echobot.model.OpeningHours;
 import ru.urfu.echobot.model.Room;
+import ru.urfu.echobot.repository.InMemorySubscriptionRepository;
 import ru.urfu.echobot.repository.SqliteBaseRepository;
 import ru.urfu.echobot.repository.SqliteBookingRepository;
 import ru.urfu.echobot.repository.SqliteDatabase;
 import ru.urfu.echobot.repository.SqliteRoomRepository;
 import ru.urfu.echobot.service.Button;
 import ru.urfu.echobot.service.Message;
+import ru.urfu.echobot.service.UserDirectory;
 
 /// Tests booking conversations against isolated SQLite data without Telegram.
 final class BookingMessageProcessingServiceTest {
@@ -143,7 +145,37 @@ final class BookingMessageProcessingServiceTest {
         ownerService.processMessage(new Message("/start", null, List.of()), CLIENT, bot);
 
         assertTrue(lastButtons().containsAll(List.of("Забронировать", "Мои записи", "О базе",
-                "Горячие слоты", "Подписка", "Базы")));
+                "Горячие слоты", "Подписка", "Базы", "Администраторы")));
+    }
+
+    /// Администратор запоминается по имени и может бронировать время ближе обычного срока.
+    @Test
+    void administratorCanBookCloserThanLeadTimeAndUsernameIsRemembered() {
+        UserDirectory directory = UserDirectory.inMemory();
+        BookingMessageProcessingService adminService = new BookingMessageProcessingService(
+                baseRepository, roomRepository, bookingRepository,
+                new BookingRules(Clock.fixed(Instant.parse("2026-10-20T07:00:00Z"), ZoneOffset.UTC)),
+                Set.of(), new InMemorySubscriptionRepository(), directory);
+
+        adminService.processMessage(new Message("/start", null, List.of(), "@Ivan_Admin"), CLIENT, bot);
+        assertTrue(directory.findByUsername("ivan_admin").isPresent());
+        directory.addAdministrator(directory.findByUsername("ivan_admin").orElseThrow());
+
+        adminService.processMessage(new Message(null, "menu:book", List.of()), CLIENT, bot);
+        adminService.processMessage(new Message(null, "book:base:1", List.of()), CLIENT, bot);
+        adminService.processMessage(new Message(null, "book:room:1", List.of()), CLIENT, bot);
+        adminService.processMessage(new Message(null, "book:day:2026-10-20", List.of()), CLIENT, bot);
+
+        assertTrue(lastButtons().contains("11:00"));
+        adminService.processMessage(new Message(null, "book:time:2026-10-20:11", List.of()), CLIENT, bot);
+        adminService.processMessage(new Message(null, "book:hours:1", List.of()), CLIENT, bot);
+        adminService.processMessage(new Message("Мария", null, List.of()), CLIENT, bot);
+        adminService.processMessage(new Message("+7 916 777-88-99", null, List.of()), CLIENT, bot);
+        adminService.processMessage(new Message(null, "book:skip", List.of()), CLIENT, bot);
+        adminService.processMessage(new Message(null, "book:confirm", List.of()), CLIENT, bot);
+
+        assertTrue(bot.messages().stream().anyMatch(message -> "Готово, запись создана.".equals(message.text())));
+        assertEquals(1, bookingRepository.findByUser(CLIENT).size());
     }
 
     /// Given: клиент проходит весь диалог. When: подтверждает бронь. Then: запись создана и видна в «Мои записи».
