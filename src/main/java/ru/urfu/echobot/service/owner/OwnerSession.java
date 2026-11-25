@@ -52,7 +52,9 @@ final class OwnerSession implements GenericStateMachine.State<OwnerSession.Step>
         /// Подтверждение удаления зала.
         DELETE_ROOM,
         /// Подтверждение удаления базы.
-        DELETE_BASE
+        DELETE_BASE,
+        /// Ввод имени нового администратора.
+        ADMIN_ADD
     }
 
     /// События, вызывающие переход между шагами настройки базы.
@@ -110,7 +112,9 @@ final class OwnerSession implements GenericStateMachine.State<OwnerSession.Step>
         /// Запрошено удаление базы.
         DELETE_BASE,
         /// Удаление базы подтверждено.
-        DELETE_BASE_CONFIRMED
+        DELETE_BASE_CONFIRMED,
+        /// Владелец начал добавление администратора.
+        ADD_ADMIN
     }
 
     /// Текущий шаг диалога.

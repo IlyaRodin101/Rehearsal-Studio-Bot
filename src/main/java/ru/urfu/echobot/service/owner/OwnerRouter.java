@@ -30,6 +30,8 @@ final class OwnerRouter {
     private final OwnerRoomService roomService;
     /// Черновик новой базы.
     private final OwnerDraftScheduleService draftSchedule;
+    /// Управление администраторами.
+    private OwnerAdministratorService administrators;
     /// Обработчики действий.
     private final Map<String, BiConsumer<OwnerCallback, Bot>> actions;
     /// Обработчики текста по шагам.
@@ -182,6 +184,24 @@ final class OwnerRouter {
                 editing.handleEditText(text.userId(), text.value(), bot));
         textHandlers.put(OwnerSession.Step.ROOM_EDIT_NAME, (text, bot) ->
                 editing.handleEditText(text.userId(), text.value(), bot));
+        textHandlers.put(OwnerSession.Step.ADMIN_ADD, (text, bot) ->
+                administrators.handleAddText(text.userId(), text.value(), bot));
+    }
+
+    /// Подключает управление администраторами.
+    ///
+    /// @param administratorService сервис управления администраторами
+    void addAdministrators(OwnerAdministratorService administratorService) {
+        administrators = administratorService;
+        actions.put("admins", (callback, bot) -> administrators.show(callback.userId(), bot));
+        actions.put("adminadd", (callback, bot) -> administrators.beginAdd(callback.userId(), bot));
+        actions.put("adminremove", (callback, bot) -> {
+            if (callback.size() == MINIMAL_PARTS) {
+                administrators.beginRemove(callback.userId(), bot);
+            } else {
+                administrators.remove(callback.userId(), callback.longPart(ARGUMENT_PART), bot);
+            }
+        });
     }
 
     /// Добавляет действия настройки правил отмены.

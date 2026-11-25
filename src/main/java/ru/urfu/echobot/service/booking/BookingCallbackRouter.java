@@ -38,6 +38,8 @@ public final class BookingCallbackRouter {
     private static final String HOME = "home";
     /// Действие перехода к базам владельца.
     private static final String BASES = "bases";
+    /// Действие перехода к администраторам.
+    private static final String ADMINS = "admins";
     /// Действие выбора базы.
     private static final String BASE = "base";
     /// Действие списка.
@@ -153,6 +155,8 @@ public final class BookingCallbackRouter {
                 baseInformation.showAboutBases(context.chatId(), bot));
         menuActions.put(BASES, (context, bot) ->
                 ownerService.showBaseList(context.userId(), bot));
+        menuActions.put(ADMINS, (context, bot) ->
+                ownerService.showAdministrators(context.userId(), bot));
         menuActions.put(HOME, (context, bot) ->
                 menuController.returnToMenu(context.chatId(), context.flow(), bot));
     }

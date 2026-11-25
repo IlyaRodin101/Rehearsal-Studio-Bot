@@ -4,6 +4,7 @@ import java.util.Map;
 import java.util.Set;
 import ru.urfu.echobot.bot.Bot;
 import ru.urfu.echobot.service.GenericStateMachine;
+import ru.urfu.echobot.service.UserDirectory;
 import ru.urfu.echobot.repository.BaseRepository;
 import ru.urfu.echobot.repository.RoomRepository;
 
@@ -17,14 +18,27 @@ public final class OwnerManagementService {
     private final OwnerBaseService baseService;
     /// Маршрутизатор сообщений владельца.
     private final OwnerRouter router;
+    /// Управление администраторами.
+    private final OwnerAdministratorService administratorService;
 
-    /// Создаёт сервис управления базами владельцев.
+    /// Создаёт сервис управления базами владельцев с хранилищем администраторов в памяти.
     ///
     /// @param baseRepository хранилище баз
     /// @param roomRepository хранилище залов
     /// @param ownerIds       Telegram ID владельцев
     public OwnerManagementService(BaseRepository baseRepository, RoomRepository roomRepository,
                                   Set<Long> ownerIds) {
+        this(baseRepository, roomRepository, ownerIds, UserDirectory.inMemory());
+    }
+
+    /// Создаёт сервис управления базами владельцев.
+    ///
+    /// @param baseRepository хранилище баз
+    /// @param roomRepository хранилище залов
+    /// @param ownerIds       Telegram ID владельцев
+    /// @param userDirectory  справочник известных пользователей и администраторов
+    public OwnerManagementService(BaseRepository baseRepository, RoomRepository roomRepository,
+                                  Set<Long> ownerIds, UserDirectory userDirectory) {
         OwnerMessaging messaging = new OwnerMessaging();
         sessions = new OwnerSessions();
         GenericStateMachine<OwnerSession.Step, OwnerSession.Event> stateMachine = createStateMachine();
@@ -42,7 +56,10 @@ public final class OwnerManagementService {
                 baseRepository, roomRepository, baseService, draftSchedule);
         OwnerCancellationRulesService cancellationRules = new OwnerCancellationRulesService(sessions, access,
                 messaging, baseService);
+        administratorService = new OwnerAdministratorService(userDirectory, sessions, access, messaging,
+                stateMachine);
         router = new OwnerRouter(access, baseService, creation, editing, schedule, roomService, draftSchedule);
+        router.addAdministrators(administratorService);
         router.addCancellationRules(cancellationRules);
     }
 
@@ -62,7 +79,8 @@ public final class OwnerManagementService {
                         Map.entry(OwnerSession.Event.EDIT_ROOM_NAME, OwnerSession.Step.ROOM_EDIT_NAME),
                         Map.entry(OwnerSession.Event.ADD_ROOM_TO_BASE, OwnerSession.Step.ROOM_CREATE_NAME),
                         Map.entry(OwnerSession.Event.DELETE_ROOM, OwnerSession.Step.DELETE_ROOM),
-                        Map.entry(OwnerSession.Event.DELETE_BASE, OwnerSession.Step.DELETE_BASE))),
+                        Map.entry(OwnerSession.Event.DELETE_BASE, OwnerSession.Step.DELETE_BASE),
+                        Map.entry(OwnerSession.Event.ADD_ADMIN, OwnerSession.Step.ADMIN_ADD))),
                 Map.entry(OwnerSession.Step.CREATE_NAME, Map.of(
                         OwnerSession.Event.ENTER_BASE_NAME, OwnerSession.Step.CREATE_ADDRESS)),
                 Map.entry(OwnerSession.Step.CREATE_ADDRESS, Map.of(
@@ -128,6 +146,14 @@ public final class OwnerManagementService {
     /// @param bot    бот для отправки
     public void showBaseList(long userId, Bot bot) {
         baseService.showBaseList(userId, bot);
+    }
+
+    /// Показывает список администраторов.
+    ///
+    /// @param userId идентификатор владельца
+    /// @param bot    бот для отправки
+    public void showAdministrators(long userId, Bot bot) {
+        administratorService.show(userId, bot);
     }
 
     /// Обрабатывает callback-команду владельца.
