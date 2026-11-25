@@ -16,7 +16,6 @@ import ru.urfu.echobot.service.owner.OwnerManagementService;
 import ru.urfu.echobot.bot.Bot;
 import ru.urfu.echobot.repository.BaseRepository;
 import ru.urfu.echobot.repository.BookingRepository;
-import ru.urfu.echobot.repository.InMemorySubscriptionRepository;
 import ru.urfu.echobot.repository.RoomRepository;
 import ru.urfu.echobot.repository.SubscriptionRepository;
 
@@ -33,32 +32,6 @@ public final class BookingMessageProcessingService implements MessageProcessingS
     private final BookingTextController textController;
     /// Справочник пользователей, которые писали боту.
     private final UserDirectory userDirectory;
-
-    /// Создаёт обработчик сообщений без владельцев баз.
-    ///
-    /// @param baseRepository    репозиторий баз
-    /// @param roomRepository    репозиторий залов
-    /// @param bookingRepository репозиторий бронирований
-    /// @param rules             правила бронирования
-    public BookingMessageProcessingService(BaseRepository baseRepository, RoomRepository roomRepository,
-                                           BookingRepository bookingRepository, BookingRules rules) {
-        this(baseRepository, roomRepository, bookingRepository, rules, Set.of(),
-                new InMemorySubscriptionRepository(), UserDirectory.inMemory());
-    }
-
-    /// Создаёт обработчик сообщений с указанными владельцами баз.
-    ///
-    /// @param baseRepository    репозиторий баз
-    /// @param roomRepository    репозиторий залов
-    /// @param bookingRepository репозиторий бронирований
-    /// @param rules             правила бронирования
-    /// @param ownerIds          Telegram ID владельцев баз
-    public BookingMessageProcessingService(BaseRepository baseRepository, RoomRepository roomRepository,
-                                           BookingRepository bookingRepository, BookingRules rules,
-                                           Set<Long> ownerIds) {
-        this(baseRepository, roomRepository, bookingRepository, rules, ownerIds,
-                new InMemorySubscriptionRepository(), UserDirectory.inMemory());
-    }
 
     /// Создаёт обработчик сообщений с хранилищем подписок.
     ///
@@ -92,7 +65,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         StaffAccess staffAccess = new StaffAccess(ownerIds, userDirectory);
         BookingAvailabilityService availabilityService = new BookingAvailabilityService(roomRepository,
                 bookingRepository, rules);
-        GenericStateMachine<BookingStep.Step, BookingStep.Event> stateMachine = createStateMachine();
+        GenericStateMachine<BookingState, BookingEvent> stateMachine = createStateMachine();
         BookingBaseSelectionService baseSelection = new BookingBaseSelectionService(baseRepository, roomRepository);
         BookingDateSelectionService dateSelection = new BookingDateSelectionService(baseRepository,
                 availabilityService, rules, staffAccess);
@@ -130,47 +103,47 @@ public final class BookingMessageProcessingService implements MessageProcessingS
     /// Создаёт автомат переходов диалога бронирования.
     ///
     /// @return общий автомат состояний
-    private GenericStateMachine<BookingStep.Step, BookingStep.Event> createStateMachine() {
-        Map<BookingStep.Step, Map<BookingStep.Event, BookingStep.Step>> transitions = Map.ofEntries(
-                Map.entry(BookingStep.Step.MENU, Map.of(
-                        BookingStep.Event.BEGIN_BOOKING, BookingStep.Step.BOOK_BASES)),
-                Map.entry(BookingStep.Step.BOOK_BASES, Map.of(
-                        BookingStep.Event.SELECT_BASE, BookingStep.Step.BOOK_ROOMS,
-                        BookingStep.Event.BACK, BookingStep.Step.MENU)),
-                Map.entry(BookingStep.Step.BOOK_ROOMS, Map.of(
-                        BookingStep.Event.SELECT_ROOM, BookingStep.Step.BOOK_MONTH,
-                        BookingStep.Event.BACK, BookingStep.Step.BOOK_BASES)),
-                Map.entry(BookingStep.Step.BOOK_MONTH, Map.of(
-                        BookingStep.Event.SELECT_MONTH, BookingStep.Step.BOOK_WEEK,
-                        BookingStep.Event.CHANGE_MONTH_PAGE, BookingStep.Step.BOOK_MONTH,
-                        BookingStep.Event.SELECT_DAY, BookingStep.Step.BOOK_TIME,
-                        BookingStep.Event.BACK, BookingStep.Step.BOOK_ROOMS)),
-                Map.entry(BookingStep.Step.BOOK_WEEK, Map.of(
-                        BookingStep.Event.SELECT_WEEK, BookingStep.Step.BOOK_DAY,
-                        BookingStep.Event.BACK, BookingStep.Step.BOOK_MONTH)),
-                Map.entry(BookingStep.Step.BOOK_DAY, Map.of(
-                        BookingStep.Event.SELECT_DAY, BookingStep.Step.BOOK_TIME,
-                        BookingStep.Event.BACK, BookingStep.Step.BOOK_WEEK)),
-                Map.entry(BookingStep.Step.BOOK_TIME, Map.of(
-                        BookingStep.Event.SELECT_TIME, BookingStep.Step.BOOK_DURATION,
-                        BookingStep.Event.BACK, BookingStep.Step.BOOK_DAY)),
-                Map.entry(BookingStep.Step.BOOK_DURATION, Map.of(
-                        BookingStep.Event.SELECT_DURATION, BookingStep.Step.BOOK_NAME,
-                        BookingStep.Event.BACK, BookingStep.Step.BOOK_TIME)),
-                Map.entry(BookingStep.Step.BOOK_NAME, Map.of(
-                        BookingStep.Event.ENTER_NAME, BookingStep.Step.BOOK_PHONE,
-                        BookingStep.Event.BACK, BookingStep.Step.BOOK_DURATION)),
-                Map.entry(BookingStep.Step.BOOK_PHONE, Map.of(
-                        BookingStep.Event.VALID_PHONE, BookingStep.Step.BOOK_COMMENT,
-                        BookingStep.Event.BACK, BookingStep.Step.BOOK_NAME)),
-                Map.entry(BookingStep.Step.BOOK_COMMENT, Map.of(
-                        BookingStep.Event.ENTER_COMMENT, BookingStep.Step.BOOK_CONFIRM,
-                        BookingStep.Event.SKIP_COMMENT, BookingStep.Step.BOOK_CONFIRM,
-                        BookingStep.Event.BACK, BookingStep.Step.BOOK_NAME)),
-                Map.entry(BookingStep.Step.BOOK_CONFIRM, Map.of(
-                        BookingStep.Event.CONFIRM_BOOKING, BookingStep.Step.MENU,
-                        BookingStep.Event.CANCEL, BookingStep.Step.MENU,
-                        BookingStep.Event.BACK, BookingStep.Step.BOOK_COMMENT)));
+    private GenericStateMachine<BookingState, BookingEvent> createStateMachine() {
+        Map<BookingState, Map<BookingEvent, BookingState>> transitions = Map.ofEntries(
+                Map.entry(BookingState.MENU, Map.of(
+                        BookingEvent.BEGIN_BOOKING, BookingState.BOOK_BASES)),
+                Map.entry(BookingState.BOOK_BASES, Map.of(
+                        BookingEvent.SELECT_BASE, BookingState.BOOK_ROOMS,
+                        BookingEvent.BACK, BookingState.MENU)),
+                Map.entry(BookingState.BOOK_ROOMS, Map.of(
+                        BookingEvent.SELECT_ROOM, BookingState.BOOK_MONTH,
+                        BookingEvent.BACK, BookingState.BOOK_BASES)),
+                Map.entry(BookingState.BOOK_MONTH, Map.of(
+                        BookingEvent.SELECT_MONTH, BookingState.BOOK_WEEK,
+                        BookingEvent.CHANGE_MONTH_PAGE, BookingState.BOOK_MONTH,
+                        BookingEvent.SELECT_DAY, BookingState.BOOK_TIME,
+                        BookingEvent.BACK, BookingState.BOOK_ROOMS)),
+                Map.entry(BookingState.BOOK_WEEK, Map.of(
+                        BookingEvent.SELECT_WEEK, BookingState.BOOK_DAY,
+                        BookingEvent.BACK, BookingState.BOOK_MONTH)),
+                Map.entry(BookingState.BOOK_DAY, Map.of(
+                        BookingEvent.SELECT_DAY, BookingState.BOOK_TIME,
+                        BookingEvent.BACK, BookingState.BOOK_WEEK)),
+                Map.entry(BookingState.BOOK_TIME, Map.of(
+                        BookingEvent.SELECT_TIME, BookingState.BOOK_DURATION,
+                        BookingEvent.BACK, BookingState.BOOK_DAY)),
+                Map.entry(BookingState.BOOK_DURATION, Map.of(
+                        BookingEvent.SELECT_DURATION, BookingState.BOOK_NAME,
+                        BookingEvent.BACK, BookingState.BOOK_TIME)),
+                Map.entry(BookingState.BOOK_NAME, Map.of(
+                        BookingEvent.ENTER_NAME, BookingState.BOOK_PHONE,
+                        BookingEvent.BACK, BookingState.BOOK_DURATION)),
+                Map.entry(BookingState.BOOK_PHONE, Map.of(
+                        BookingEvent.VALID_PHONE, BookingState.BOOK_COMMENT,
+                        BookingEvent.BACK, BookingState.BOOK_NAME)),
+                Map.entry(BookingState.BOOK_COMMENT, Map.of(
+                        BookingEvent.ENTER_COMMENT, BookingState.BOOK_CONFIRM,
+                        BookingEvent.SKIP_COMMENT, BookingState.BOOK_CONFIRM,
+                        BookingEvent.BACK, BookingState.BOOK_NAME)),
+                Map.entry(BookingState.BOOK_CONFIRM, Map.of(
+                        BookingEvent.CONFIRM_BOOKING, BookingState.MENU,
+                        BookingEvent.CANCEL, BookingState.MENU,
+                        BookingEvent.BACK, BookingState.BOOK_COMMENT)));
         return new GenericStateMachine<>(transitions);
     }
 

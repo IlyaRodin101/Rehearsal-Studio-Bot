@@ -40,7 +40,7 @@ final class OwnerAdministratorService {
     /// Сообщения и клавиатуры.
     private final OwnerMessaging messaging;
     /// Автомат состояний владельца.
-    private final GenericStateMachine<OwnerSession.Step, OwnerSession.Event> stateMachine;
+    private final GenericStateMachine<OwnerState, OwnerEvent> stateMachine;
 
     /// Создаёт сервис управления администраторами.
     ///
@@ -51,7 +51,7 @@ final class OwnerAdministratorService {
     /// @param stateMachine автомат состояний владельца
     OwnerAdministratorService(UserDirectory directory, OwnerSessions sessions, OwnerAccess access,
                               OwnerMessaging messaging,
-                              GenericStateMachine<OwnerSession.Step, OwnerSession.Event> stateMachine) {
+                              GenericStateMachine<OwnerState, OwnerEvent> stateMachine) {
         this.directory = directory;
         this.sessions = sessions;
         this.access = access;
@@ -76,8 +76,8 @@ final class OwnerAdministratorService {
     void beginAdd(long userId, Bot bot) {
         if (access.requireOwner(userId, bot)) {
             OwnerSession session = sessions.get(userId);
-            stateMachine.reset(session, OwnerSession.Step.IDLE);
-            if (stateMachine.transition(session, OwnerSession.Event.ADD_ADMIN)) {
+            stateMachine.reset(session, OwnerState.IDLE);
+            if (stateMachine.transition(session, OwnerEvent.ADD_ADMIN)) {
                 messaging.send(bot, userId, ADD_PROMPT, messaging.choices(messaging.button(
                         OwnerMessaging.BACK_TEXT, ADMINS_CALLBACK)));
             }
@@ -146,7 +146,7 @@ final class OwnerAdministratorService {
                     OwnerMessaging.BACK_TEXT, ADMINS_CALLBACK)));
         } else {
             directory.addAdministrator(user.get());
-            stateMachine.reset(sessions.get(userId), OwnerSession.Step.IDLE);
+            stateMachine.reset(sessions.get(userId), OwnerState.IDLE);
             sendList(userId, bot, ADMIN_PREFIX + user.get().mention() + " добавлен.");
         }
     }
@@ -172,7 +172,7 @@ final class OwnerAdministratorService {
     /// @param bot    бот для отправки
     /// @param notice уведомление перед списком или null
     private void sendList(long userId, Bot bot, String notice) {
-        stateMachine.reset(sessions.get(userId), OwnerSession.Step.IDLE);
+        stateMachine.reset(sessions.get(userId), OwnerState.IDLE);
         String list = administratorsText(directory.administrators());
         String text = notice == null ? list : notice + "\n\n" + list;
         messaging.send(bot, userId, text, List.of(messaging.row(

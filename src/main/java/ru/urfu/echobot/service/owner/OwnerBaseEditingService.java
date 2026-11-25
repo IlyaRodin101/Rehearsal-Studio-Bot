@@ -29,7 +29,7 @@ final class OwnerBaseEditingService {
     /// Сообщения и клавиатуры.
     private final OwnerMessaging messaging;
     /// Автомат состояний.
-    private final GenericStateMachine<OwnerSession.Step, OwnerSession.Event> stateMachine;
+    private final GenericStateMachine<OwnerState, OwnerEvent> stateMachine;
     /// Основные операции с базами.
     private final OwnerBaseService baseService;
     /// Операции с залами.
@@ -44,7 +44,7 @@ final class OwnerBaseEditingService {
     /// @param baseService  основные операции с базами
     /// @param roomService  операции с залами
     OwnerBaseEditingService(OwnerSessions sessions, OwnerAccess access, OwnerMessaging messaging,
-                            GenericStateMachine<OwnerSession.Step, OwnerSession.Event> stateMachine,
+                            GenericStateMachine<OwnerState, OwnerEvent> stateMachine,
                             OwnerBaseService baseService, OwnerRoomService roomService) {
         this.sessions = sessions;
         this.access = access;
@@ -79,8 +79,8 @@ final class OwnerBaseEditingService {
     void selectLeadHours(long userId, int hours, Bot bot) {
         OwnerSession session = sessions.get(userId);
         boolean valid = hours >= MIN_LEAD_HOURS && hours <= MAX_LEAD_HOURS;
-        if (session.step == OwnerSession.Step.CREATE_LEAD && valid
-                && stateMachine.transition(session, OwnerSession.Event.ENTER_LEAD)) {
+        if (session.step == OwnerState.CREATE_LEAD && valid
+                && stateMachine.transition(session, OwnerEvent.ENTER_LEAD)) {
             session.leadHours = hours;
             messaging.send(bot, userId, ASK_EQUIPMENT, messaging.backKeyboard());
         } else if (valid) {
@@ -113,7 +113,7 @@ final class OwnerBaseEditingService {
     void handleEditText(long userId, String text, Bot bot) {
         OwnerSession session = sessions.get(userId);
         String value = text.trim();
-        if (session.step == OwnerSession.Step.ROOM_EDIT_NAME) {
+        if (session.step == OwnerState.ROOM_EDIT_NAME) {
             saveRoomName(userId, session, value, bot);
         } else {
             saveBaseField(userId, session, text, value, bot);
@@ -130,7 +130,7 @@ final class OwnerBaseEditingService {
         Room room = access.activeOwnedRoom(userId, session, session.selectedRoomId, bot);
         if (value.isEmpty()) {
             messaging.send(bot, userId, EMPTY_ROOM_NAME, messaging.backKeyboard());
-        } else if (room != null && stateMachine.transition(session, OwnerSession.Event.SAVE_TEXT)) {
+        } else if (room != null && stateMachine.transition(session, OwnerEvent.SAVE_TEXT)) {
             roomService.renameRoom(room, value);
             roomService.selectRoom(userId, room.id(), bot);
         }
@@ -150,13 +150,13 @@ final class OwnerBaseEditingService {
             return;
         }
         Base edited = baseService.copy(base,
-                session.step == OwnerSession.Step.EDIT_NAME ? value : base.name(),
-                session.step == OwnerSession.Step.EDIT_ADDRESS ? value : base.address(),
-                session.step == OwnerSession.Step.EDIT_TIMEZONE ? timezone : base.timezone(),
+                session.step == OwnerState.EDIT_NAME ? value : base.name(),
+                session.step == OwnerState.EDIT_ADDRESS ? value : base.address(),
+                session.step == OwnerState.EDIT_TIMEZONE ? timezone : base.timezone(),
                 base.bookingLeadHours(),
-                session.step == OwnerSession.Step.EDIT_EQUIPMENT ? text : base.equipment(),
+                session.step == OwnerState.EDIT_EQUIPMENT ? text : base.equipment(),
                 base.openingHours());
-        if (stateMachine.transition(session, OwnerSession.Event.SAVE_TEXT)) {
+        if (stateMachine.transition(session, OwnerEvent.SAVE_TEXT)) {
             baseService.updateBase(userId, edited);
             baseService.showBaseMenu(userId, bot);
         }
@@ -171,7 +171,7 @@ final class OwnerBaseEditingService {
     /// @return нормализованный пояс или null, если он не нужен или неверен
     private String editedTimezone(long userId, OwnerSession session, String value, Bot bot) {
         String timezone = value;
-        if (session.step == OwnerSession.Step.EDIT_TIMEZONE) {
+        if (session.step == OwnerState.EDIT_TIMEZONE) {
             try {
                 timezone = ZoneId.of(value).getId();
             } catch (DateTimeException exception) {
@@ -190,7 +190,7 @@ final class OwnerBaseEditingService {
     /// @param bot     бот для отправки
     /// @return true, если значение допустимо
     private boolean validBaseValue(long userId, OwnerSession session, String value, Bot bot) {
-        boolean empty = value.isEmpty() && session.step != OwnerSession.Step.EDIT_EQUIPMENT;
+        boolean empty = value.isEmpty() && session.step != OwnerState.EDIT_EQUIPMENT;
         if (empty) {
             messaging.send(bot, userId, EMPTY_VALUE, messaging.backKeyboard());
         }
@@ -205,17 +205,17 @@ final class OwnerBaseEditingService {
     private void startTextEdit(long userId, String field, Bot bot) {
         OwnerSession session = sessions.get(userId);
         if ("name".equals(field)
-                && stateMachine.transition(session, OwnerSession.Event.EDIT_NAME)) {
+                && stateMachine.transition(session, OwnerEvent.EDIT_NAME)) {
             messaging.send(bot, userId, "Введите новое название базы.", messaging.backKeyboard());
         } else if ("address".equals(field)
-                && stateMachine.transition(session, OwnerSession.Event.EDIT_ADDRESS)) {
+                && stateMachine.transition(session, OwnerEvent.EDIT_ADDRESS)) {
             messaging.send(bot, userId, "Введите новый адрес базы.", messaging.backKeyboard());
         } else if ("timezone".equals(field)
-                && stateMachine.transition(session, OwnerSession.Event.EDIT_TIMEZONE)) {
+                && stateMachine.transition(session, OwnerEvent.EDIT_TIMEZONE)) {
             messaging.send(bot, userId, "Введите новый часовой пояс базы. Например: Europe/Moscow.",
                     messaging.backKeyboard());
         } else if ("equipment".equals(field)
-                && stateMachine.transition(session, OwnerSession.Event.EDIT_EQUIPMENT)) {
+                && stateMachine.transition(session, OwnerEvent.EDIT_EQUIPMENT)) {
             messaging.send(bot, userId, ASK_EQUIPMENT, messaging.backKeyboard());
         }
     }

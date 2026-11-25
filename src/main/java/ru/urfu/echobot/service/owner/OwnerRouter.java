@@ -35,7 +35,7 @@ final class OwnerRouter {
     /// Обработчики действий.
     private final Map<String, BiConsumer<OwnerCallback, Bot>> actions;
     /// Обработчики текста по шагам.
-    private final Map<OwnerSession.Step, BiConsumer<OwnerText, Bot>> textHandlers;
+    private final Map<OwnerState, BiConsumer<OwnerText, Bot>> textHandlers;
 
     /// Создаёт маршрутизатор сообщений владельца.
     ///
@@ -82,7 +82,7 @@ final class OwnerRouter {
     /// @param bot     бот для отправки
     /// @return true, если текст обработан формой владельца
     boolean handleText(long userId, OwnerSession session, String text, Bot bot) {
-        if (session.step == OwnerSession.Step.IDLE) {
+        if (session.step == OwnerState.IDLE) {
             return false;
         }
         if (!access.requireOwner(userId, bot)) {
@@ -162,30 +162,28 @@ final class OwnerRouter {
 
     /// Заполняет обработчики текста по шагам формы.
     private void registerTextHandlers() {
-        textHandlers.put(OwnerSession.Step.CREATE_NAME, (text, bot) ->
+        textHandlers.put(OwnerState.CREATE_NAME, (text, bot) ->
                 baseCreation.handleName(text.userId(), text.value(), bot));
-        textHandlers.put(OwnerSession.Step.CREATE_ADDRESS, (text, bot) ->
+        textHandlers.put(OwnerState.CREATE_ADDRESS, (text, bot) ->
                 baseCreation.handleAddress(text.userId(), text.value(), bot));
-        textHandlers.put(OwnerSession.Step.CREATE_TIMEZONE, (text, bot) ->
+        textHandlers.put(OwnerState.CREATE_TIMEZONE, (text, bot) ->
                 baseCreation.handleTimezone(text.userId(), text.value(), bot));
-        textHandlers.put(OwnerSession.Step.CREATE_ROOM_NAME, (text, bot) ->
+        textHandlers.put(OwnerState.CREATE_ROOM_NAME, (text, bot) ->
                 draftSchedule.handleRoomName(text.userId(), text.value(), bot));
-        textHandlers.put(OwnerSession.Step.CREATE_EQUIPMENT, (text, bot) ->
+        textHandlers.put(OwnerState.CREATE_EQUIPMENT, (text, bot) ->
                 baseCreation.handleEquipment(text.userId(), text.value(), bot));
-        textHandlers.put(OwnerSession.Step.ROOM_CREATE_NAME, (text, bot) ->
+        textHandlers.put(OwnerState.ROOM_CREATE_NAME, (text, bot) ->
                 roomService.handleRoomName(text.userId(), text.value(), bot));
-        textHandlers.put(OwnerSession.Step.EDIT_NAME, (text, bot) ->
+        textHandlers.put(OwnerState.EDIT_NAME, (text, bot) ->
                 editing.handleEditText(text.userId(), text.value(), bot));
-        textHandlers.put(OwnerSession.Step.EDIT_ADDRESS, (text, bot) ->
+        textHandlers.put(OwnerState.EDIT_ADDRESS, (text, bot) ->
                 editing.handleEditText(text.userId(), text.value(), bot));
-        textHandlers.put(OwnerSession.Step.EDIT_TIMEZONE, (text, bot) ->
+        textHandlers.put(OwnerState.EDIT_TIMEZONE, (text, bot) ->
                 editing.handleEditText(text.userId(), text.value(), bot));
-        textHandlers.put(OwnerSession.Step.EDIT_EQUIPMENT, (text, bot) ->
+        textHandlers.put(OwnerState.EDIT_EQUIPMENT, (text, bot) ->
                 editing.handleEditText(text.userId(), text.value(), bot));
-        textHandlers.put(OwnerSession.Step.ROOM_EDIT_NAME, (text, bot) ->
+        textHandlers.put(OwnerState.ROOM_EDIT_NAME, (text, bot) ->
                 editing.handleEditText(text.userId(), text.value(), bot));
-        textHandlers.put(OwnerSession.Step.ADMIN_ADD, (text, bot) ->
-                administrators.handleAddText(text.userId(), text.value(), bot));
     }
 
     /// Подключает управление администраторами.
@@ -202,6 +200,16 @@ final class OwnerRouter {
                 administrators.remove(callback.userId(), callback.longPart(ARGUMENT_PART), bot);
             }
         });
+        textHandlers.put(OwnerState.ADMIN_ADD, (text, bot) ->
+                administrators.handleAddText(text.userId(), text.value(), bot));
+    }
+
+    /// Показывает список администраторов владельцу.
+    ///
+    /// @param userId идентификатор владельца
+    /// @param bot    бот для отправки
+    void showAdministrators(long userId, Bot bot) {
+        administrators.show(userId, bot);
     }
 
     /// Добавляет действия настройки правил отмены.

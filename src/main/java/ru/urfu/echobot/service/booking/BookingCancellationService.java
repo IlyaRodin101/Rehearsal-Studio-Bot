@@ -117,7 +117,7 @@ public final class BookingCancellationService {
         if (free) {
             send(bot, chatId, TIME_IS_FREE, List.of());
         }
-        notifyOwner(booking, free, bot);
+        notifyOwner(booking, free, userId, bot);
         if (rules.isHotSlot(booking.base(), booking.booking().start())) {
             notifier.notifySubscribers(booking.base(), booking.room(), booking.booking(), bot);
         }
@@ -143,10 +143,11 @@ public final class BookingCancellationService {
 
     /// Отправляет владельцу сведения об отменённой записи.
     ///
-    /// @param item отменённая запись с базой и залом
-    /// @param free true, если отмена бесплатная
-    /// @param bot  бот для отправки сообщения
-    private void notifyOwner(UpcomingBooking item, boolean free, Bot bot) {
+    /// @param item   отменённая запись с базой и залом
+    /// @param free   true, если отмена бесплатная
+    /// @param userId Telegram ID клиента, отменившего запись
+    /// @param bot    бот для отправки сообщения
+    private void notifyOwner(UpcomingBooking item, boolean free, long userId, Bot bot) {
         Booking booking = item.booking();
         String status = free
                 ? "бесплатно"
@@ -157,6 +158,7 @@ public final class BookingCancellationService {
                 + formatter.dateTime(booking.start()) + "-"
                 + formatter.endTime(booking.start(), booking.end()) + LINE_END
                 + "Клиент: " + booking.customerName() + ", " + booking.phone() + LINE_END
+                + "Telegram ID: " + userId + LINE_END
                 + "Комментарий: " + comment;
         bot.sendMessage(new Message(text, null, List.of()), item.base().ownerId());
     }

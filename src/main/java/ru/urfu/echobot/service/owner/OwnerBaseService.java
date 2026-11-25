@@ -27,7 +27,7 @@ final class OwnerBaseService {
     /// Сообщения и клавиатуры.
     private final OwnerMessaging messaging;
     /// Автомат состояний владельца.
-    private final GenericStateMachine<OwnerSession.Step, OwnerSession.Event> stateMachine;
+    private final GenericStateMachine<OwnerState, OwnerEvent> stateMachine;
     /// Клавиатуры списка и меню баз и залов.
     private final OwnerButtons buttons;
 
@@ -40,7 +40,7 @@ final class OwnerBaseService {
     /// @param stateMachine   автомат состояний
     /// @param buttons        клавиатуры баз и залов
     OwnerBaseService(BaseRepository baseRepository, OwnerSessions sessions, OwnerAccess access,
-                     OwnerMessaging messaging, GenericStateMachine<OwnerSession.Step, OwnerSession.Event> stateMachine,
+                     OwnerMessaging messaging, GenericStateMachine<OwnerState, OwnerEvent> stateMachine,
                      OwnerButtons buttons) {
         this.baseRepository = baseRepository;
         this.sessions = sessions;
@@ -99,7 +99,7 @@ final class OwnerBaseService {
         OwnerSession session = sessions.get(userId);
         Base base = access.selectedBase(userId, session, bot);
         if (base != null) {
-            stateMachine.reset(session, OwnerSession.Step.IDLE);
+            stateMachine.reset(session, OwnerState.IDLE);
             messaging.send(bot, userId, BASE_PREFIX + base.name() + "». Что изменить?", buttons.baseMenuButtons(base));
         }
     }
@@ -114,7 +114,7 @@ final class OwnerBaseService {
         Base base = baseRepository.findById(baseId).orElse(null);
         if (base == null || base.ownerId() != userId || session.selectedBaseId != baseId) {
             unavailable(userId, bot);
-        } else if (stateMachine.transition(session, OwnerSession.Event.DELETE_BASE)) {
+        } else if (stateMachine.transition(session, OwnerEvent.DELETE_BASE)) {
             messaging.send(bot, userId, "Удалить базу «" + base.name()
                     + "» вместе со всеми залами и записями? Это действие нельзя отменить.",
                     messaging.choices(messaging.button(DELETE_BASE_TEXT, "owner:deletebaseyes:" + base.id()),
@@ -130,9 +130,9 @@ final class OwnerBaseService {
     void deleteBase(long userId, long baseId, Bot bot) {
         OwnerSession session = sessions.get(userId);
         Base base = baseRepository.findById(baseId).orElse(null);
-        boolean deleted = session.step == OwnerSession.Step.DELETE_BASE && base != null && base.ownerId() == userId
+        boolean deleted = session.step == OwnerState.DELETE_BASE && base != null && base.ownerId() == userId
                 && session.selectedBaseId == baseId && baseRepository.deleteByIdAndOwnerId(baseId, userId);
-        if (!deleted || !stateMachine.transition(session, OwnerSession.Event.DELETE_BASE_CONFIRMED)) {
+        if (!deleted || !stateMachine.transition(session, OwnerEvent.DELETE_BASE_CONFIRMED)) {
             unavailable(userId, bot);
         } else {
             session.reset();
