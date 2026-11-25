@@ -26,7 +26,7 @@ public final class BookingTextController {
     /// Обработчики текстовых команд.
     private final Map<String, BiConsumer<BookingText, Bot>> commandHandlers;
     /// Обработчики текста на шагах диалога.
-    private final Map<BookingStep.Step, BiConsumer<BookingText, Bot>> stepHandlers;
+    private final Map<BookingState, BiConsumer<BookingText, Bot>> stepHandlers;
 
     /// Создаёт контроллер текста.
     ///
@@ -49,11 +49,11 @@ public final class BookingTextController {
         commandHandlers.put(BACK_TEXT, (text, bot) ->
                 menuController.back(text.chatId(), text.flow(), bot));
         stepHandlers = new HashMap<>();
-        stepHandlers.put(BookingStep.Step.BOOK_NAME, (text, bot) ->
+        stepHandlers.put(BookingState.BOOK_NAME, (text, bot) ->
                 formService.handleNameText(text.chatId(), text.flow(), text.text(), bot));
-        stepHandlers.put(BookingStep.Step.BOOK_PHONE, (text, bot) ->
+        stepHandlers.put(BookingState.BOOK_PHONE, (text, bot) ->
                 formService.handlePhoneText(text.chatId(), text.flow(), text.text(), bot));
-        stepHandlers.put(BookingStep.Step.BOOK_COMMENT, (text, bot) ->
+        stepHandlers.put(BookingState.BOOK_COMMENT, (text, bot) ->
                 confirmation.handleCommentText(text.chatId(), text.flow(), text.text(), bot));
     }
 

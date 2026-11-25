@@ -26,6 +26,7 @@ import ru.urfu.echobot.repository.SqliteBaseRepository;
 import ru.urfu.echobot.repository.SqliteBookingRepository;
 import ru.urfu.echobot.repository.SqliteDatabase;
 import ru.urfu.echobot.repository.SqliteRoomRepository;
+import ru.urfu.echobot.repository.SqliteSubscriptionRepository;
 import ru.urfu.echobot.service.Button;
 import ru.urfu.echobot.service.Message;
 
@@ -45,6 +46,8 @@ final class BookingMessageProcessingServiceTest {
     private BookingMessageProcessingService service;
     @TempDir
     private Path temporaryDirectory;
+    /// База данных тестового сценария.
+    private SqliteDatabase database;
     private SqliteBaseRepository baseRepository;
     private SqliteBookingRepository bookingRepository;
     private SqliteRoomRepository roomRepository;
@@ -53,7 +56,7 @@ final class BookingMessageProcessingServiceTest {
     @BeforeEach
     void setUp() {
         Clock clock = Clock.fixed(Instant.parse("2026-10-20T07:00:00Z"), ZoneOffset.UTC);
-        SqliteDatabase database = new SqliteDatabase(temporaryDirectory.resolve("bookings.db").toString());
+        database = new SqliteDatabase(temporaryDirectory.resolve("bookings.db").toString());
         baseRepository = new SqliteBaseRepository(database);
         roomRepository = new SqliteRoomRepository(database);
         bookingRepository = new SqliteBookingRepository(database);
@@ -71,7 +74,7 @@ final class BookingMessageProcessingServiceTest {
         roomRepository.save(new Room(0, north.id(), "Зал 1", false));
         roomRepository.save(new Room(0, north.id(), "Студия", true));
         service = new BookingMessageProcessingService(baseRepository, roomRepository, bookingRepository,
-                new BookingRules(clock));
+                new BookingRules(clock), Set.of(), new SqliteSubscriptionRepository(database));
         bot = new DummyBot();
     }
 
@@ -138,7 +141,7 @@ final class BookingMessageProcessingServiceTest {
                 baseRepository,
                 roomRepository,
                 bookingRepository,
-                new BookingRules(clock), Set.of(CLIENT));
+                new BookingRules(clock), Set.of(CLIENT), new SqliteSubscriptionRepository(database));
 
         ownerService.processMessage(new Message("/start", null, List.of()), CLIENT, bot);
 
@@ -199,7 +202,8 @@ final class BookingMessageProcessingServiceTest {
 
         assertTrue(bot.messages().stream().anyMatch(m -> "Запись отменена.".equals(m.text())));
         assertTrue(bot.messages().stream().anyMatch(m -> m.text() != null
-                && m.text().startsWith("Клиент отменил запись бесплатно:")));
+                && m.text().startsWith("Клиент отменил запись бесплатно:")
+                && m.text().contains("Telegram ID: " + CLIENT)));
         assertEquals("У вас пока нет будущих записей.", lastText());
     }
 

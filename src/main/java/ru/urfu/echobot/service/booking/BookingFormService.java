@@ -30,7 +30,7 @@ public final class BookingFormService {
     /// Правила проверки бронирования.
     private final BookingRules rules;
     /// Автомат состояний диалога.
-    private final GenericStateMachine<BookingStep.Step, BookingStep.Event> stateMachine;
+    private final GenericStateMachine<BookingState, BookingEvent> stateMachine;
     /// Сервис комментария и подтверждения.
     private final BookingConfirmationService confirmation;
     /// Нормализатор российских номеров телефонов.
@@ -48,7 +48,7 @@ public final class BookingFormService {
     /// @param confirmation      сервис комментария и подтверждения
     public BookingFormService(BaseRepository baseRepository, RoomRepository roomRepository,
                               BookingRepository bookingRepository, BookingRules rules,
-                              GenericStateMachine<BookingStep.Step, BookingStep.Event> stateMachine,
+                              GenericStateMachine<BookingState, BookingEvent> stateMachine,
                               BookingConfirmationService confirmation) {
         this.baseRepository = baseRepository;
         this.roomRepository = roomRepository;
@@ -77,7 +77,7 @@ public final class BookingFormService {
             promptName(chatId, bot);
         } else {
             flow.name = text;
-            if (stateMachine.transition(flow, BookingStep.Event.ENTER_NAME)) {
+            if (stateMachine.transition(flow, BookingEvent.ENTER_NAME)) {
                 promptPhone(chatId, bot);
             }
         }
@@ -104,7 +104,7 @@ public final class BookingFormService {
                     + "+7 999 123-45-67 или 8 999 123-45-67.", keyboards.backKeyboard());
         } else {
             flow.phone = normalizedPhone.get();
-            if (stateMachine.transition(flow, BookingStep.Event.VALID_PHONE)) {
+            if (stateMachine.transition(flow, BookingEvent.VALID_PHONE)) {
                 confirmation.promptComment(chatId, flow, bot);
             }
         }

@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -29,6 +30,7 @@ import ru.urfu.echobot.repository.SqliteBaseRepository;
 import ru.urfu.echobot.repository.SqliteBookingRepository;
 import ru.urfu.echobot.repository.SqliteDatabase;
 import ru.urfu.echobot.repository.SqliteRoomRepository;
+import ru.urfu.echobot.repository.SqliteSubscriptionRepository;
 import ru.urfu.echobot.service.Message;
 
 /// Проверяет, что один сервис обслуживает несколько одновременных диалогов бронирования.
@@ -76,7 +78,7 @@ final class BookingConcurrencyTest {
                 2, "Барабаны", schedule));
         roomRepository.save(new Room(0, center.id(), "Зал 1", false));
         service = new BookingMessageProcessingService(baseRepository, roomRepository, bookingRepository,
-                new BookingRules(clock));
+                new BookingRules(clock), Set.of(), new SqliteSubscriptionRepository(database));
         executor = Executors.newFixedThreadPool(CLIENTS);
     }
 

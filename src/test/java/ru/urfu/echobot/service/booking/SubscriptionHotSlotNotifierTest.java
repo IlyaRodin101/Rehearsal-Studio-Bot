@@ -3,6 +3,7 @@ package ru.urfu.echobot.service.booking;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -11,11 +12,14 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import ru.urfu.echobot.bot.DummyBot;
 import ru.urfu.echobot.model.Base;
 import ru.urfu.echobot.model.Booking;
 import ru.urfu.echobot.model.Room;
-import ru.urfu.echobot.repository.InMemorySubscriptionRepository;
+import ru.urfu.echobot.repository.SqliteBaseRepository;
+import ru.urfu.echobot.repository.SqliteDatabase;
+import ru.urfu.echobot.repository.SqliteSubscriptionRepository;
 import ru.urfu.echobot.service.Button;
 
 /// Тесты рассылки уведомлений о «горячих» слотах.
@@ -33,13 +37,23 @@ final class SubscriptionHotSlotNotifierTest {
     private final Room room = new Room(5, 1, "Зал 1", false);
     private final Booking booking = new Booking(5, 42, LocalDateTime.of(2026, 10, 21, 20, 0), 2,
             "Анна", "+79990000000", "");
-    private InMemorySubscriptionRepository subscriptions;
+    /// Временная директория для файла базы данных.
+    @TempDir
+    private Path temporaryDirectory;
+    /// Хранилище подписок в SQLite.
+    private SqliteSubscriptionRepository subscriptions;
+    /// Рассылка уведомлений подписчикам.
     private SubscriptionHotSlotNotifier notifier;
 
     /// Создаёт хранилище подписок и рассылку.
     @BeforeEach
     void setUp() {
-        subscriptions = new InMemorySubscriptionRepository();
+        SqliteDatabase database = new SqliteDatabase(temporaryDirectory.resolve("bookings.db").toString());
+        SqliteBaseRepository bases = new SqliteBaseRepository(database);
+        bases.save(base);
+        bases.save(new Base(0, OWNER, "Север", "Ленина, 2", "Europe/Moscow", 2, "",
+                Map.of(), 48, 100));
+        subscriptions = new SqliteSubscriptionRepository(database);
         notifier = new SubscriptionHotSlotNotifier(subscriptions, new BookingRules(clock));
     }
 
