@@ -27,6 +27,8 @@ public final class BookingMenuController {
     private static final String MENU_BASES = "menu:bases";
     /// Callback раздела управления администраторами.
     private static final String MENU_ADMINS = "menu:admins";
+    /// Callback раздела расписания.
+    private static final String MENU_SCHEDULE = "menu:schedule";
     /// Текст главного меню.
     private static final String GREETING = "Здравствуйте! Что хотите сделать?";
 
@@ -86,6 +88,9 @@ public final class BookingMenuController {
                 keyboards.button("Мои записи", MENU_MINE), keyboards.button("О базе", MENU_ABOUT)));
         rows.add(keyboards.row(keyboards.button("Горячие слоты", MENU_HOT),
                 keyboards.button("Подписка", MENU_SUB)));
+        if (ownerService.isStaff(chatId)) {
+            rows.add(keyboards.row(keyboards.button("Расписание", MENU_SCHEDULE)));
+        }
         if (ownerService.isOwner(chatId)) {
             rows.add(keyboards.row(keyboards.button("Базы", MENU_BASES),
                     keyboards.button("Администраторы", MENU_ADMINS)));

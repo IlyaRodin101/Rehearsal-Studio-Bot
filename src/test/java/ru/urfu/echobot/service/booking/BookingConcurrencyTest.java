@@ -26,15 +26,12 @@ import ru.urfu.echobot.bot.DummyBot;
 import ru.urfu.echobot.model.Base;
 import ru.urfu.echobot.model.OpeningHours;
 import ru.urfu.echobot.model.Room;
-import ru.urfu.echobot.repository.SqliteAdministratorRepository;
 import ru.urfu.echobot.repository.SqliteBaseRepository;
 import ru.urfu.echobot.repository.SqliteBookingRepository;
 import ru.urfu.echobot.repository.SqliteDatabase;
 import ru.urfu.echobot.repository.SqliteRoomRepository;
 import ru.urfu.echobot.repository.SqliteSubscriptionRepository;
-import ru.urfu.echobot.repository.SqliteUserRepository;
 import ru.urfu.echobot.service.Message;
-import ru.urfu.echobot.service.UserDirectory;
 
 /// Проверяет, что один сервис обслуживает несколько одновременных диалогов бронирования.
 final class BookingConcurrencyTest {
@@ -80,10 +77,8 @@ final class BookingConcurrencyTest {
         Base center = baseRepository.save(new Base(0, 0, "Центр", "ул. Ленина, 1", "Europe/Moscow",
                 2, "Барабаны", schedule));
         roomRepository.save(new Room(0, center.id(), "Зал 1", false));
-        UserDirectory directory = new UserDirectory(new SqliteUserRepository(database),
-                new SqliteAdministratorRepository(database));
         service = new BookingMessageProcessingService(baseRepository, roomRepository, bookingRepository,
-                new BookingRules(clock), Set.of(), new SqliteSubscriptionRepository(database), directory);
+                new BookingRules(clock), Set.of(), new SqliteSubscriptionRepository(database));
         executor = Executors.newFixedThreadPool(CLIENTS);
     }
 

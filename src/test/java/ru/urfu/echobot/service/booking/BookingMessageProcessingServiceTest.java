@@ -22,13 +22,11 @@ import ru.urfu.echobot.model.Base;
 import ru.urfu.echobot.model.Booking;
 import ru.urfu.echobot.model.OpeningHours;
 import ru.urfu.echobot.model.Room;
-import ru.urfu.echobot.repository.SqliteAdministratorRepository;
 import ru.urfu.echobot.repository.SqliteBaseRepository;
 import ru.urfu.echobot.repository.SqliteBookingRepository;
 import ru.urfu.echobot.repository.SqliteDatabase;
 import ru.urfu.echobot.repository.SqliteRoomRepository;
 import ru.urfu.echobot.repository.SqliteSubscriptionRepository;
-import ru.urfu.echobot.repository.SqliteUserRepository;
 import ru.urfu.echobot.service.Button;
 import ru.urfu.echobot.service.Message;
 import ru.urfu.echobot.service.UserDirectory;
@@ -76,10 +74,8 @@ final class BookingMessageProcessingServiceTest {
         roomRepository.save(new Room(0, center.id(), "Зал 2", false));
         roomRepository.save(new Room(0, north.id(), "Зал 1", false));
         roomRepository.save(new Room(0, north.id(), "Студия", true));
-        UserDirectory directory = new UserDirectory(new SqliteUserRepository(database),
-                new SqliteAdministratorRepository(database));
         service = new BookingMessageProcessingService(baseRepository, roomRepository, bookingRepository,
-                new BookingRules(clock), Set.of(), new SqliteSubscriptionRepository(database), directory);
+                new BookingRules(clock), Set.of(), new SqliteSubscriptionRepository(database));
         bot = new DummyBot();
     }
 
@@ -142,14 +138,11 @@ final class BookingMessageProcessingServiceTest {
     @Test
     void ownerSeesBaseManagementAndClientActions() {
         Clock clock = Clock.fixed(Instant.parse("2026-10-20T07:00:00Z"), ZoneOffset.UTC);
-        UserDirectory ownerDirectory = new UserDirectory(new SqliteUserRepository(database),
-                new SqliteAdministratorRepository(database));
         BookingMessageProcessingService ownerService = new BookingMessageProcessingService(
                 baseRepository,
                 roomRepository,
                 bookingRepository,
-                new BookingRules(clock), Set.of(CLIENT), new SqliteSubscriptionRepository(database),
-                ownerDirectory);
+                new BookingRules(clock), Set.of(CLIENT), new SqliteSubscriptionRepository(database));
 
         ownerService.processMessage(new Message("/start", null, List.of()), CLIENT, bot);
 
@@ -160,8 +153,7 @@ final class BookingMessageProcessingServiceTest {
     /// Администратор запоминается по имени и может бронировать время ближе обычного срока.
     @Test
     void administratorCanBookCloserThanLeadTimeAndUsernameIsRemembered() {
-        UserDirectory directory = new UserDirectory(new SqliteUserRepository(database),
-                new SqliteAdministratorRepository(database));
+        UserDirectory directory = UserDirectory.inMemory();
         BookingMessageProcessingService adminService = new BookingMessageProcessingService(
                 baseRepository, roomRepository, bookingRepository,
                 new BookingRules(Clock.fixed(Instant.parse("2026-10-20T07:00:00Z"), ZoneOffset.UTC)),

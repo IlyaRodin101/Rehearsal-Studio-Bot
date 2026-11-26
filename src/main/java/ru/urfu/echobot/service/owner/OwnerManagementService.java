@@ -21,6 +21,16 @@ public final class OwnerManagementService {
     /// Справочник известных пользователей и администраторов.
     private final UserDirectory userDirectory;
 
+    /// Создаёт сервис управления базами владельцев с хранилищем администраторов в памяти.
+    ///
+    /// @param baseRepository хранилище баз
+    /// @param roomRepository хранилище залов
+    /// @param ownerIds       Telegram ID владельцев
+    public OwnerManagementService(BaseRepository baseRepository, RoomRepository roomRepository,
+                                  Set<Long> ownerIds) {
+        this(baseRepository, roomRepository, ownerIds, UserDirectory.inMemory());
+    }
+
     /// Создаёт сервис управления базами владельцев.
     ///
     /// @param baseRepository хранилище баз
@@ -83,7 +93,6 @@ public final class OwnerManagementService {
                         OwnerEvent.FINISH_DAY, OwnerState.CREATE_OPENING,
                         OwnerEvent.LAST_DAY, OwnerState.CREATE_ROOM_NAME)),
                 Map.entry(OwnerState.CREATE_CLOSING, Map.of(
-                        OwnerEvent.ENTER_CLOSING, OwnerState.CREATE_OPENING,
                         OwnerEvent.FINISH_DAY, OwnerState.CREATE_OPENING)),
                 Map.entry(OwnerState.CREATE_ROOM_NAME, Map.of(
                         OwnerEvent.ENTER_ROOM_NAME, OwnerState.CREATE_ROOM_REQUIRED)),

@@ -17,11 +17,9 @@ import ru.urfu.echobot.bot.DummyBot;
 import ru.urfu.echobot.model.Base;
 import ru.urfu.echobot.model.OpeningHours;
 import ru.urfu.echobot.model.Room;
-import ru.urfu.echobot.repository.SqliteAdministratorRepository;
 import ru.urfu.echobot.repository.SqliteBaseRepository;
 import ru.urfu.echobot.repository.SqliteDatabase;
 import ru.urfu.echobot.repository.SqliteRoomRepository;
-import ru.urfu.echobot.repository.SqliteUserRepository;
 import ru.urfu.echobot.service.Button;
 import ru.urfu.echobot.service.UserDirectory;
 
@@ -34,7 +32,6 @@ final class OwnerManagementServiceTest {
     private Path temporaryDirectory;
     private SqliteBaseRepository bases;
     private SqliteRoomRepository rooms;
-    private SqliteDatabase database;
     private OwnerManagementService service;
     private DummyBot bot;
 
@@ -42,22 +39,14 @@ final class OwnerManagementServiceTest {
     void setUp() {
         Map<DayOfWeek, OpeningHours> schedule = new EnumMap<>(DayOfWeek.class);
         schedule.put(DayOfWeek.MONDAY, new OpeningHours(9, 24));
-        database = new SqliteDatabase(temporaryDirectory.resolve("bookings.db").toString());
+        SqliteDatabase database = new SqliteDatabase(temporaryDirectory.resolve("bookings.db").toString());
         bases = new SqliteBaseRepository(database);
         rooms = new SqliteRoomRepository(database);
         Base base = bases.save(new Base(0, OWNER, "Центр", "Ленина, 1",
                 "Europe/Moscow", 2, "Оборудование", schedule));
         rooms.save(new Room(0, base.id(), "Зал 1", false));
-        service = new OwnerManagementService(bases, rooms, Set.of(OWNER, OTHER_OWNER), userDirectory());
+        service = new OwnerManagementService(bases, rooms, Set.of(OWNER, OTHER_OWNER));
         bot = new DummyBot();
-    }
-
-    /// Создаёт справочник пользователей на основе SQLite.
-    ///
-    /// @return справочник для текущей тестовой базы
-    private UserDirectory userDirectory() {
-        return new UserDirectory(new SqliteUserRepository(database),
-                new SqliteAdministratorRepository(database));
     }
 
     @Test
@@ -172,7 +161,7 @@ final class OwnerManagementServiceTest {
     /// Владелец добавляет администратора по имени пользователя и удаляет его из списка.
     @Test
     void ownerCanAddAndRemoveAdministratorByUsername() {
-        UserDirectory directory = userDirectory();
+        UserDirectory directory = UserDirectory.inMemory();
         directory.remember(200, "@Ivan_Admin");
         OwnerManagementService adminService = new OwnerManagementService(bases, rooms, Set.of(OWNER), directory);
 
@@ -201,7 +190,7 @@ final class OwnerManagementServiceTest {
     @Test
     void ownerCannotAddUnknownAdministrator() {
         OwnerManagementService adminService = new OwnerManagementService(bases, rooms, Set.of(OWNER),
-                userDirectory());
+                UserDirectory.inMemory());
 
         adminService.handleCallback(OWNER, "owner:adminadd".split(":"), bot);
         adminService.handleText(OWNER, "@unknown_user", bot);
@@ -214,7 +203,7 @@ final class OwnerManagementServiceTest {
     @Test
     void nonOwnerCannotManageAdministrators() {
         OwnerManagementService adminService = new OwnerManagementService(bases, rooms, Set.of(OWNER),
-                userDirectory());
+                UserDirectory.inMemory());
 
         adminService.handleCallback(OTHER_OWNER, "owner:admins".split(":"), bot);
 

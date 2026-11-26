@@ -4,6 +4,8 @@ import java.util.List;
 import java.util.Optional;
 import ru.urfu.echobot.model.TelegramUser;
 import ru.urfu.echobot.repository.AdministratorRepository;
+import ru.urfu.echobot.repository.InMemoryAdministratorRepository;
+import ru.urfu.echobot.repository.InMemoryUserRepository;
 import ru.urfu.echobot.repository.UserRepository;
 
 /// Объединяет поиск пользователей бота и список администраторов.
@@ -20,6 +22,13 @@ public final class UserDirectory {
     public UserDirectory(UserRepository users, AdministratorRepository administrators) {
         this.users = users;
         this.administrators = administrators;
+    }
+
+    /// Создаёт справочник с хранилищем в памяти.
+    ///
+    /// @return справочник без постоянного хранилища
+    public static UserDirectory inMemory() {
+        return new UserDirectory(new InMemoryUserRepository(), new InMemoryAdministratorRepository());
     }
 
     /// Запоминает пользователя, написавшего боту.

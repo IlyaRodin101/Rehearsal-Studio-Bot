@@ -33,6 +33,21 @@ public final class BookingMessageProcessingService implements MessageProcessingS
     /// Справочник пользователей, которые писали боту.
     private final UserDirectory userDirectory;
 
+    /// Создаёт обработчик сообщений с хранилищем подписок.
+    ///
+    /// @param baseRepository         репозиторий баз
+    /// @param roomRepository         репозиторий залов
+    /// @param bookingRepository      репозиторий бронирований
+    /// @param rules                  правила бронирования
+    /// @param ownerIds               Telegram ID владельцев баз
+    /// @param subscriptionRepository хранилище подписок
+    public BookingMessageProcessingService(BaseRepository baseRepository, RoomRepository roomRepository,
+                                           BookingRepository bookingRepository, BookingRules rules,
+                                           Set<Long> ownerIds, SubscriptionRepository subscriptionRepository) {
+        this(baseRepository, roomRepository, bookingRepository, rules, ownerIds, subscriptionRepository,
+                UserDirectory.inMemory());
+    }
+
     /// Создаёт обработчик сообщений с постоянным справочником пользователей.
     ///
     /// @param baseRepository         репозиторий баз
@@ -68,6 +83,13 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         BaseInformationService baseInformation = new BaseInformationService(baseRepository);
         OwnerManagementService ownerService = new OwnerManagementService(baseRepository, roomRepository,
                 ownerIds, userDirectory);
+        ScheduleService scheduleService = new ScheduleService(baseRepository, roomRepository,
+                bookingRepository, rules);
+        ScheduleCancellationService scheduleCancellation = new ScheduleCancellationService(
+                baseRepository, roomRepository, bookingRepository, rules, staffAccess,
+                userDirectory, notifier);
+        ScheduleController scheduleController = new ScheduleController(scheduleService,
+                scheduleCancellation, staffAccess, userDirectory);
         BookingMenuController menuController = new BookingMenuController(ownerService, stateMachine,
                 baseSelection, dateSelection, timeSelection, formService, confirmation);
         BookingNavigationController navigation = new BookingNavigationController(baseSelection, dateSelection,
@@ -80,7 +102,7 @@ public final class BookingMessageProcessingService implements MessageProcessingS
         SubscriptionController subscriptionController = new SubscriptionController(baseRepository,
                 subscriptionService, menuController, keyboards);
         callbackRouter = new BookingCallbackRouter(ownerService, menuController, navigation,
-                clientController, baseInformation);
+                clientController, baseInformation, scheduleController);
         callbackRouter.registerHotSlots(hotSlotController, subscriptionController);
         textController = new BookingTextController(ownerService, menuController, formService, confirmation);
     }
