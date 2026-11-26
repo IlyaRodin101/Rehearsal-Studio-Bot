@@ -52,6 +52,13 @@ final class BookingRulesTest {
         assertTrue(rules.canBook(base, LocalDateTime.of(2026, 10, 20, 12, 0), 1));
     }
 
+    /// Given: администратор бронирует ближе срока. When: срок не учитывается. Then: можно, но прошлое нельзя.
+    @Test
+    void staffCanIgnoreLeadTimeButCannotBookPast() {
+        assertTrue(rules.canBook(base, LocalDateTime.of(2026, 10, 20, 11, 0), 1, true));
+        assertFalse(rules.canBook(base, LocalDateTime.of(2026, 10, 20, 9, 0), 1, true));
+    }
+
     /// Given: бронь выходит за закрытие. When: проверяем. Then: нельзя, а до самого закрытия можно.
     @Test
     void bookingAfterClosingIsRejected() {

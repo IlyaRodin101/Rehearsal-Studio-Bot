@@ -52,6 +52,8 @@ public enum OwnerEvent {
     DELETE_ROOM,
     /// Удаление зала подтверждено.
     DELETE_ROOM_CONFIRMED,
+    /// Владелец начал добавление администратора.
+    ADD_ADMIN,
     /// Запрошено удаление базы.
     DELETE_BASE,
     /// Удаление базы подтверждено.

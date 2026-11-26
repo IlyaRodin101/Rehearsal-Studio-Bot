@@ -4,6 +4,7 @@ import java.util.Map;
 import java.util.Set;
 import ru.urfu.echobot.bot.Bot;
 import ru.urfu.echobot.service.GenericStateMachine;
+import ru.urfu.echobot.service.UserDirectory;
 import ru.urfu.echobot.repository.BaseRepository;
 import ru.urfu.echobot.repository.RoomRepository;
 
@@ -17,14 +18,18 @@ public final class OwnerManagementService {
     private final OwnerBaseService baseService;
     /// Маршрутизатор сообщений владельца.
     private final OwnerRouter router;
+    /// Справочник известных пользователей и администраторов.
+    private final UserDirectory userDirectory;
 
     /// Создаёт сервис управления базами владельцев.
     ///
     /// @param baseRepository хранилище баз
     /// @param roomRepository хранилище залов
     /// @param ownerIds       Telegram ID владельцев
+    /// @param userDirectory  справочник известных пользователей и администраторов
     public OwnerManagementService(BaseRepository baseRepository, RoomRepository roomRepository,
-                                  Set<Long> ownerIds) {
+                                  Set<Long> ownerIds, UserDirectory userDirectory) {
+        this.userDirectory = userDirectory;
         OwnerMessaging messaging = new OwnerMessaging();
         sessions = new OwnerSessions();
         GenericStateMachine<OwnerState, OwnerEvent> stateMachine = createStateMachine();
@@ -42,7 +47,10 @@ public final class OwnerManagementService {
                 baseRepository, roomRepository, baseService, draftSchedule);
         OwnerCancellationRulesService cancellationRules = new OwnerCancellationRulesService(sessions, access,
                 messaging, baseService);
+        OwnerAdministratorService administratorService = new OwnerAdministratorService(userDirectory, sessions,
+                access, messaging, stateMachine);
         router = new OwnerRouter(access, baseService, creation, editing, schedule, roomService, draftSchedule);
+        router.addAdministrators(administratorService);
         router.addCancellationRules(cancellationRules);
     }
 
@@ -62,7 +70,8 @@ public final class OwnerManagementService {
                         Map.entry(OwnerEvent.EDIT_ROOM_NAME, OwnerState.ROOM_EDIT_NAME),
                         Map.entry(OwnerEvent.ADD_ROOM_TO_BASE, OwnerState.ROOM_CREATE_NAME),
                         Map.entry(OwnerEvent.DELETE_ROOM, OwnerState.DELETE_ROOM),
-                        Map.entry(OwnerEvent.DELETE_BASE, OwnerState.DELETE_BASE))),
+                        Map.entry(OwnerEvent.DELETE_BASE, OwnerState.DELETE_BASE),
+                        Map.entry(OwnerEvent.ADD_ADMIN, OwnerState.ADMIN_ADD))),
                 Map.entry(OwnerState.CREATE_NAME, Map.of(
                         OwnerEvent.ENTER_BASE_NAME, OwnerState.CREATE_ADDRESS)),
                 Map.entry(OwnerState.CREATE_ADDRESS, Map.of(
@@ -74,6 +83,7 @@ public final class OwnerManagementService {
                         OwnerEvent.FINISH_DAY, OwnerState.CREATE_OPENING,
                         OwnerEvent.LAST_DAY, OwnerState.CREATE_ROOM_NAME)),
                 Map.entry(OwnerState.CREATE_CLOSING, Map.of(
+                        OwnerEvent.ENTER_CLOSING, OwnerState.CREATE_OPENING,
                         OwnerEvent.FINISH_DAY, OwnerState.CREATE_OPENING)),
                 Map.entry(OwnerState.CREATE_ROOM_NAME, Map.of(
                         OwnerEvent.ENTER_ROOM_NAME, OwnerState.CREATE_ROOM_REQUIRED)),
@@ -115,6 +125,22 @@ public final class OwnerManagementService {
         return access.isOwner(userId);
     }
 
+    /// Проверяет, является ли пользователь администратором.
+    ///
+    /// @param userId идентификатор пользователя
+    /// @return true, если пользователь администратор
+    public boolean isAdministrator(long userId) {
+        return userDirectory.isAdministrator(userId);
+    }
+
+    /// Проверяет, является ли пользователь владельцем или администратором.
+    ///
+    /// @param userId идентификатор пользователя
+    /// @return true, если пользователь владелец или администратор
+    public boolean isStaff(long userId) {
+        return isOwner(userId) || isAdministrator(userId);
+    }
+
     /// Прерывает незавершённую настройку владельца.
     ///
     /// @param userId идентификатор владельца
@@ -128,6 +154,14 @@ public final class OwnerManagementService {
     /// @param bot    бот для отправки
     public void showBaseList(long userId, Bot bot) {
         baseService.showBaseList(userId, bot);
+    }
+
+    /// Показывает список администраторов.
+    ///
+    /// @param userId идентификатор владельца
+    /// @param bot    бот для отправки
+    public void showAdministrators(long userId, Bot bot) {
+        router.showAdministrators(userId, bot);
     }
 
     /// Обрабатывает callback-команду владельца.

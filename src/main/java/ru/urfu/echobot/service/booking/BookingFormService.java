@@ -13,6 +13,7 @@ import ru.urfu.echobot.model.Room;
 import ru.urfu.echobot.repository.BaseRepository;
 import ru.urfu.echobot.repository.BookingRepository;
 import ru.urfu.echobot.repository.RoomRepository;
+import ru.urfu.echobot.service.StaffAccess;
 
 /// Обрабатывает ввод контактных данных и создаёт бронирование.
 public final class BookingFormService {
@@ -33,6 +34,8 @@ public final class BookingFormService {
     private final GenericStateMachine<BookingState, BookingEvent> stateMachine;
     /// Сервис комментария и подтверждения.
     private final BookingConfirmationService confirmation;
+    /// Права владельцев и администраторов.
+    private final StaffAccess staffAccess;
     /// Нормализатор российских номеров телефонов.
     private final PhoneNormalizer phoneNormalizer = new PhoneNormalizer();
     /// Фабрика клавиатур.
@@ -46,16 +49,18 @@ public final class BookingFormService {
     /// @param rules             правила бронирования
     /// @param stateMachine      автомат состояний диалога
     /// @param confirmation      сервис комментария и подтверждения
+    /// @param staffAccess       права владельцев и администраторов
     public BookingFormService(BaseRepository baseRepository, RoomRepository roomRepository,
                               BookingRepository bookingRepository, BookingRules rules,
                               GenericStateMachine<BookingState, BookingEvent> stateMachine,
-                              BookingConfirmationService confirmation) {
+                              BookingConfirmationService confirmation, StaffAccess staffAccess) {
         this.baseRepository = baseRepository;
         this.roomRepository = roomRepository;
         this.bookingRepository = bookingRepository;
         this.rules = rules;
         this.stateMachine = stateMachine;
         this.confirmation = confirmation;
+        this.staffAccess = staffAccess;
     }
 
     /// Просит клиента ввести имя.
@@ -120,7 +125,7 @@ public final class BookingFormService {
         Base base = baseRepository.findById(flow.baseId).orElse(null);
         Room room = roomRepository.findById(flow.roomId).orElse(null);
         return base != null && room != null && room.active() && room.baseId() == base.id()
-                && rules.canBook(base, start, flow.hours)
+                && rules.canBook(base, start, flow.hours, staffAccess.isStaff(userId))
                 && bookingRepository.addIfFree(new Booking(flow.roomId, userId, start, flow.hours,
                 flow.name, flow.phone, flow.comment == null ? "" : flow.comment));
     }

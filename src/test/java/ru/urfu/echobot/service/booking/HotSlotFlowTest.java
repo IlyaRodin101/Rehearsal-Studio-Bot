@@ -22,13 +22,16 @@ import ru.urfu.echobot.model.Base;
 import ru.urfu.echobot.model.Booking;
 import ru.urfu.echobot.model.OpeningHours;
 import ru.urfu.echobot.model.Room;
+import ru.urfu.echobot.repository.SqliteAdministratorRepository;
 import ru.urfu.echobot.repository.SqliteBaseRepository;
 import ru.urfu.echobot.repository.SqliteBookingRepository;
 import ru.urfu.echobot.repository.SqliteDatabase;
 import ru.urfu.echobot.repository.SqliteRoomRepository;
 import ru.urfu.echobot.repository.SqliteSubscriptionRepository;
+import ru.urfu.echobot.repository.SqliteUserRepository;
 import ru.urfu.echobot.service.Button;
 import ru.urfu.echobot.service.Message;
+import ru.urfu.echobot.service.UserDirectory;
 
 /// Сквозные тесты раздела «Горячие слоты».
 final class HotSlotFlowTest {
@@ -62,8 +65,10 @@ final class HotSlotFlowTest {
         base = baseRepository.save(new Base(0, OWNER, "Центр", "Ленина, 1", "Europe/Moscow", 2, "",
                 schedule, 48, 100));
         room = roomRepository.save(new Room(0, base.id(), "Зал 1", false));
+        UserDirectory directory = new UserDirectory(new SqliteUserRepository(database),
+                new SqliteAdministratorRepository(database));
         service = new BookingMessageProcessingService(baseRepository, roomRepository, bookingRepository,
-                new BookingRules(clock), Set.of(OWNER), subscriptions);
+                new BookingRules(clock), Set.of(OWNER), subscriptions, directory);
         bot = new DummyBot();
     }
 

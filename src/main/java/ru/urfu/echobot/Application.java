@@ -12,11 +12,14 @@ import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import ru.urfu.echobot.bot.TelegramBot;
+import ru.urfu.echobot.repository.SqliteAdministratorRepository;
 import ru.urfu.echobot.repository.SqliteBaseRepository;
 import ru.urfu.echobot.repository.SqliteBookingRepository;
 import ru.urfu.echobot.repository.SqliteDatabase;
 import ru.urfu.echobot.repository.SqliteRoomRepository;
 import ru.urfu.echobot.repository.SqliteSubscriptionRepository;
+import ru.urfu.echobot.repository.SqliteUserRepository;
+import ru.urfu.echobot.service.UserDirectory;
 import ru.urfu.echobot.service.booking.BookingMessageProcessingService;
 import ru.urfu.echobot.service.booking.BookingRules;
 import ru.urfu.echobot.service.MessageProcessingService;
@@ -70,7 +73,9 @@ final class Application {
                 new SqliteBookingRepository(database),
                 new BookingRules(Clock.systemUTC()),
                 parseOwnerIds(configuration.get(OWNER_IDS)),
-                new SqliteSubscriptionRepository(database));
+                new SqliteSubscriptionRepository(database),
+                new UserDirectory(new SqliteUserRepository(database),
+                        new SqliteAdministratorRepository(database)));
     }
 
     /// Возвращает путь к файлу базы данных.

@@ -110,7 +110,8 @@ public final class TelegramBot extends DefaultLongPollingUpdateConsumer implemen
     private void consumeButtonPress(@NotNull CallbackQuery query) throws TelegramApiException {
         telegramClient.execute(AnswerCallbackQuery.builder().callbackQueryId(query.getId()).build());
         final long chatId = query.getMessage().getChatId();
-        final Message msg = new Message(null, query.getData(), List.of());
+        final String username = query.getFrom() == null ? null : query.getFrom().getUserName();
+        final Message msg = new Message(null, query.getData(), List.of(), username);
         logic.processMessage(msg, chatId, this);
     }
 
@@ -152,6 +153,7 @@ public final class TelegramBot extends DefaultLongPollingUpdateConsumer implemen
     /// @return объект нашего универсального сообщения
     private Message convertTelegramMessage(org.telegram.telegrambots.meta.api.objects.message.Message message) {
         final String text = message.hasPhoto() ? message.getCaption() : message.getText();
-        return new Message(text, null, List.of());
+        final String username = message.getFrom() == null ? null : message.getFrom().getUserName();
+        return new Message(text, null, List.of(), username);
     }
 }

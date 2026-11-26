@@ -41,5 +41,7 @@ public enum OwnerState {
     /// Подтверждение удаления зала.
     DELETE_ROOM,
     /// Подтверждение удаления базы.
-    DELETE_BASE
+    DELETE_BASE,
+    /// Ввод имени нового администратора.
+    ADMIN_ADD
 }

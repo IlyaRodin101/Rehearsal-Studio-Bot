@@ -12,6 +12,7 @@ import ru.urfu.echobot.model.Room;
 import ru.urfu.echobot.repository.BaseRepository;
 import ru.urfu.echobot.repository.BookingRepository;
 import ru.urfu.echobot.repository.RoomRepository;
+import ru.urfu.echobot.service.StaffAccess;
 
 /// Показывает свободное время начала и доступную длительность бронирования.
 public final class BookingTimeSelectionService {
@@ -34,6 +35,8 @@ public final class BookingTimeSelectionService {
     private final BookingRepository bookingRepository;
     /// Проверка доступности времени.
     private final BookingAvailabilityService availabilityService;
+    /// Права владельцев и администраторов.
+    private final StaffAccess staffAccess;
     /// Фабрика клавиатур.
     private final BookingKeyboardFactory keyboards = new BookingKeyboardFactory();
     /// Форматер времени.
@@ -45,13 +48,16 @@ public final class BookingTimeSelectionService {
     /// @param roomRepository      хранилище залов
     /// @param bookingRepository   хранилище броней
     /// @param availabilityService проверка доступности
+    /// @param staffAccess         права владельцев и администраторов
     public BookingTimeSelectionService(BaseRepository baseRepository, RoomRepository roomRepository,
                                        BookingRepository bookingRepository,
-                                       BookingAvailabilityService availabilityService) {
+                                       BookingAvailabilityService availabilityService,
+                                       StaffAccess staffAccess) {
         this.baseRepository = baseRepository;
         this.roomRepository = roomRepository;
         this.bookingRepository = bookingRepository;
         this.availabilityService = availabilityService;
+        this.staffAccess = staffAccess;
     }
 
     /// Показывает свободное время для выбранного дня.
@@ -64,7 +70,8 @@ public final class BookingTimeSelectionService {
         Room room = roomRepository.findById(flow.roomId).orElse(null);
         List<List<Button>> rows = new ArrayList<>();
         if (base != null && room != null) {
-            for (int hour : availabilityService.availableStarts(base, room, flow.bookingDate)) {
+            for (int hour : availabilityService.availableStarts(base, room, flow.bookingDate,
+                    staffAccess.isStaff(chatId))) {
                 keyboards.addButton(rows,
                         keyboards.button(formatter.hour(hour), BOOK_TIME + flow.bookingDate + ":" + hour),
                         TIME_BUTTONS_PER_ROW);

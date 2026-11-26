@@ -17,9 +17,13 @@ import ru.urfu.echobot.bot.DummyBot;
 import ru.urfu.echobot.model.Base;
 import ru.urfu.echobot.model.OpeningHours;
 import ru.urfu.echobot.model.Room;
+import ru.urfu.echobot.repository.SqliteAdministratorRepository;
 import ru.urfu.echobot.repository.SqliteBaseRepository;
 import ru.urfu.echobot.repository.SqliteDatabase;
 import ru.urfu.echobot.repository.SqliteRoomRepository;
+import ru.urfu.echobot.repository.SqliteUserRepository;
+import ru.urfu.echobot.service.Button;
+import ru.urfu.echobot.service.UserDirectory;
 
 /// Tests owner access controls and configuration flows.
 final class OwnerManagementServiceTest {
@@ -30,6 +34,7 @@ final class OwnerManagementServiceTest {
     private Path temporaryDirectory;
     private SqliteBaseRepository bases;
     private SqliteRoomRepository rooms;
+    private SqliteDatabase database;
     private OwnerManagementService service;
     private DummyBot bot;
 
@@ -37,14 +42,22 @@ final class OwnerManagementServiceTest {
     void setUp() {
         Map<DayOfWeek, OpeningHours> schedule = new EnumMap<>(DayOfWeek.class);
         schedule.put(DayOfWeek.MONDAY, new OpeningHours(9, 24));
-        SqliteDatabase database = new SqliteDatabase(temporaryDirectory.resolve("bookings.db").toString());
+        database = new SqliteDatabase(temporaryDirectory.resolve("bookings.db").toString());
         bases = new SqliteBaseRepository(database);
         rooms = new SqliteRoomRepository(database);
         Base base = bases.save(new Base(0, OWNER, "Центр", "Ленина, 1",
                 "Europe/Moscow", 2, "Оборудование", schedule));
         rooms.save(new Room(0, base.id(), "Зал 1", false));
-        service = new OwnerManagementService(bases, rooms, Set.of(OWNER, OTHER_OWNER));
+        service = new OwnerManagementService(bases, rooms, Set.of(OWNER, OTHER_OWNER), userDirectory());
         bot = new DummyBot();
+    }
+
+    /// Создаёт справочник пользователей на основе SQLite.
+    ///
+    /// @return справочник для текущей тестовой базы
+    private UserDirectory userDirectory() {
+        return new UserDirectory(new SqliteUserRepository(database),
+                new SqliteAdministratorRepository(database));
     }
 
     @Test
@@ -154,6 +167,58 @@ final class OwnerManagementServiceTest {
         press(OWNER, "owner:cancelpenaltyset:50");
         assertEquals(50, bases.findById(1).orElseThrow().penaltyPercent());
         assertTrue(lastText().contains("не позднее чем за 24 часов, неустойка 50%"));
+    }
+
+    /// Владелец добавляет администратора по имени пользователя и удаляет его из списка.
+    @Test
+    void ownerCanAddAndRemoveAdministratorByUsername() {
+        UserDirectory directory = userDirectory();
+        directory.remember(200, "@Ivan_Admin");
+        OwnerManagementService adminService = new OwnerManagementService(bases, rooms, Set.of(OWNER), directory);
+
+        adminService.handleCallback(OWNER, "owner:admins".split(":"), bot);
+        assertEquals("Администраторов пока нет.", lastText());
+
+        adminService.handleCallback(OWNER, "owner:adminadd".split(":"), bot);
+        assertTrue(lastText().startsWith("Введите @имя пользователя"));
+        adminService.handleText(OWNER, "@ivan_admin", bot);
+        assertTrue(directory.isAdministrator(200));
+        assertTrue(lastText().contains("Администратор @ivan_admin добавлен."));
+        assertTrue(lastText().contains("Администраторы: @ivan_admin."));
+
+        adminService.handleCallback(OWNER, "owner:adminremove".split(":"), bot);
+        String callback = bot.lastMessage().keyboard().stream().flatMap(List::stream)
+                .filter(button -> "@ivan_admin".equals(button.text()))
+                .map(Button::data)
+                .findFirst()
+                .orElseThrow();
+        adminService.handleCallback(OWNER, callback.split(":"), bot);
+        assertFalse(directory.isAdministrator(200));
+        assertTrue(lastText().contains("Администратор @ivan_admin удалён."));
+    }
+
+    /// Имя пользователя, который не писал боту, нельзя добавить в администраторы.
+    @Test
+    void ownerCannotAddUnknownAdministrator() {
+        OwnerManagementService adminService = new OwnerManagementService(bases, rooms, Set.of(OWNER),
+                userDirectory());
+
+        adminService.handleCallback(OWNER, "owner:adminadd".split(":"), bot);
+        adminService.handleText(OWNER, "@unknown_user", bot);
+
+        assertTrue(lastText().startsWith("Не удалось найти @unknown_user"));
+        assertTrue(lastText().contains("написать боту /start"));
+    }
+
+    /// Не владелец не может открыть список администраторов.
+    @Test
+    void nonOwnerCannotManageAdministrators() {
+        OwnerManagementService adminService = new OwnerManagementService(bases, rooms, Set.of(OWNER),
+                userDirectory());
+
+        adminService.handleCallback(OTHER_OWNER, "owner:admins".split(":"), bot);
+
+        assertEquals("Действие недоступно.", lastText());
     }
 
     @Test

@@ -91,7 +91,7 @@ final class OwnerDraftScheduleService {
         OwnerSession session = sessions.get(userId);
         if (hour <= session.openHour || hour > DAY_END) {
             messaging.send(bot, userId, OwnerMessaging.UNAVAILABLE, messaging.backKeyboard());
-        } else if (stateMachine.transition(session, OwnerEvent.FINISH_DAY)) {
+        } else if (stateMachine.transition(session, OwnerEvent.ENTER_CLOSING)) {
             session.schedule.put(DayOfWeek.of(session.day), new OpeningHours(session.openHour, hour));
             finishDay(userId, bot);
         }
