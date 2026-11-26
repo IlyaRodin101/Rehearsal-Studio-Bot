@@ -21,16 +21,6 @@ public final class OwnerManagementService {
     /// Справочник известных пользователей и администраторов.
     private final UserDirectory userDirectory;
 
-    /// Создаёт сервис управления базами владельцев с хранилищем администраторов в памяти.
-    ///
-    /// @param baseRepository хранилище баз
-    /// @param roomRepository хранилище залов
-    /// @param ownerIds       Telegram ID владельцев
-    public OwnerManagementService(BaseRepository baseRepository, RoomRepository roomRepository,
-                                  Set<Long> ownerIds) {
-        this(baseRepository, roomRepository, ownerIds, UserDirectory.inMemory());
-    }
-
     /// Создаёт сервис управления базами владельцев.
     ///
     /// @param baseRepository хранилище баз
