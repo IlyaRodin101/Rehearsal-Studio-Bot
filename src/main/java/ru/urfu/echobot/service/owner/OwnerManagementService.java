@@ -83,6 +83,7 @@ public final class OwnerManagementService {
                         OwnerEvent.FINISH_DAY, OwnerState.CREATE_OPENING,
                         OwnerEvent.LAST_DAY, OwnerState.CREATE_ROOM_NAME)),
                 Map.entry(OwnerState.CREATE_CLOSING, Map.of(
+                        OwnerEvent.ENTER_CLOSING, OwnerState.CREATE_OPENING,
                         OwnerEvent.FINISH_DAY, OwnerState.CREATE_OPENING)),
                 Map.entry(OwnerState.CREATE_ROOM_NAME, Map.of(
                         OwnerEvent.ENTER_ROOM_NAME, OwnerState.CREATE_ROOM_REQUIRED)),

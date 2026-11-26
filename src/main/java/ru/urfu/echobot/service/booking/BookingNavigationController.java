@@ -229,6 +229,7 @@ public final class BookingNavigationController {
     /// @param context callback-команда
     /// @param bot     бот для отправки сообщений
     public void cancel(BookingCallback context, Bot bot) {
+        stateMachine.transition(context.flow(), BookingEvent.CANCEL);
         menuController.returnToMenu(context.chatId(), context.flow(), bot);
     }
 
