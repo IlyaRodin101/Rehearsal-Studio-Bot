@@ -7,6 +7,7 @@ import java.sql.SQLException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import ru.urfu.echobot.model.Booking;
 
 /// Хранит бронирования в SQLite. Проверка пересечения и вставка выполняются в одной транзакции.
@@ -31,6 +32,8 @@ public final class SqliteBookingRepository implements BookingRepository {
     private static final int SINGLE_PARAMETER = 1;
     /// Позиция зала в запросе удаления брони.
     private static final int DELETE_ROOM_PARAMETER = 2;
+    /// Позиция времени начала в запросе поиска и удаления брони по залу и времени.
+    private static final int ROOM_START_PARAMETER = 2;
     /// Позиция времени начала в запросе удаления брони.
     private static final int DELETE_START_PARAMETER = 3;
     /// Позиция зала в запросе проверки пересечения.
@@ -102,6 +105,44 @@ public final class SqliteBookingRepository implements BookingRepository {
     @Override
     public List<Booking> findByRoom(long roomId) {
         return find("SELECT * FROM bookings WHERE room_id=? ORDER BY start_time,id", roomId);
+    }
+
+    /// Ищет бронь зала по точному времени начала.
+    ///
+    /// @param roomId идентификатор зала
+    /// @param start  время начала
+    /// @return бронь или пустой результат
+    @Override
+    public Optional<Booking> findByRoomAndStart(long roomId, LocalDateTime start) {
+        try (Connection connection = database.open();
+             PreparedStatement statement = connection.prepareStatement(
+                     "SELECT * FROM bookings WHERE room_id=? AND start_time=? ORDER BY id LIMIT 1")) {
+            statement.setLong(SINGLE_PARAMETER, roomId);
+            statement.setString(ROOM_START_PARAMETER, start.toString());
+            try (ResultSet rows = statement.executeQuery()) {
+                return rows.next() ? Optional.of(readBooking(rows)) : Optional.empty();
+            }
+        } catch (SQLException exception) {
+            throw new IllegalStateException("Не удалось найти бронь", exception);
+        }
+    }
+
+    /// Удаляет бронь зала по точному времени начала.
+    ///
+    /// @param roomId идентификатор зала
+    /// @param start  время начала
+    /// @return true, если удалена ровно одна бронь
+    @Override
+    public boolean deleteByRoomAndStart(long roomId, LocalDateTime start) {
+        try (Connection connection = database.open();
+             PreparedStatement statement = connection.prepareStatement(
+                     "DELETE FROM bookings WHERE room_id=? AND start_time=?")) {
+            statement.setLong(SINGLE_PARAMETER, roomId);
+            statement.setString(ROOM_START_PARAMETER, start.toString());
+            return statement.executeUpdate() == 1;
+        } catch (SQLException exception) {
+            throw new IllegalStateException("Не удалось удалить бронь зала", exception);
+        }
     }
 
     /// Читает брони по запросу с одним параметром.
