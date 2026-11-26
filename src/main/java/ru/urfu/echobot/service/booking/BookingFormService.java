@@ -13,6 +13,7 @@ import ru.urfu.echobot.model.Room;
 import ru.urfu.echobot.repository.BaseRepository;
 import ru.urfu.echobot.repository.BookingRepository;
 import ru.urfu.echobot.repository.RoomRepository;
+import ru.urfu.echobot.service.StaffAccess;
 
 /// Обрабатывает ввод контактных данных и создаёт бронирование.
 public final class BookingFormService {
@@ -30,9 +31,11 @@ public final class BookingFormService {
     /// Правила проверки бронирования.
     private final BookingRules rules;
     /// Автомат состояний диалога.
-    private final GenericStateMachine<BookingStep.Step, BookingStep.Event> stateMachine;
+    private final GenericStateMachine<BookingState, BookingEvent> stateMachine;
     /// Сервис комментария и подтверждения.
     private final BookingConfirmationService confirmation;
+    /// Права владельцев и администраторов.
+    private final StaffAccess staffAccess;
     /// Нормализатор российских номеров телефонов.
     private final PhoneNormalizer phoneNormalizer = new PhoneNormalizer();
     /// Фабрика клавиатур.
@@ -46,16 +49,18 @@ public final class BookingFormService {
     /// @param rules             правила бронирования
     /// @param stateMachine      автомат состояний диалога
     /// @param confirmation      сервис комментария и подтверждения
+    /// @param staffAccess       права владельцев и администраторов
     public BookingFormService(BaseRepository baseRepository, RoomRepository roomRepository,
                               BookingRepository bookingRepository, BookingRules rules,
-                              GenericStateMachine<BookingStep.Step, BookingStep.Event> stateMachine,
-                              BookingConfirmationService confirmation) {
+                              GenericStateMachine<BookingState, BookingEvent> stateMachine,
+                              BookingConfirmationService confirmation, StaffAccess staffAccess) {
         this.baseRepository = baseRepository;
         this.roomRepository = roomRepository;
         this.bookingRepository = bookingRepository;
         this.rules = rules;
         this.stateMachine = stateMachine;
         this.confirmation = confirmation;
+        this.staffAccess = staffAccess;
     }
 
     /// Просит клиента ввести имя.
@@ -77,7 +82,7 @@ public final class BookingFormService {
             promptName(chatId, bot);
         } else {
             flow.name = text;
-            if (stateMachine.transition(flow, BookingStep.Event.ENTER_NAME)) {
+            if (stateMachine.transition(flow, BookingEvent.ENTER_NAME)) {
                 promptPhone(chatId, bot);
             }
         }
@@ -104,7 +109,7 @@ public final class BookingFormService {
                     + "+7 999 123-45-67 или 8 999 123-45-67.", keyboards.backKeyboard());
         } else {
             flow.phone = normalizedPhone.get();
-            if (stateMachine.transition(flow, BookingStep.Event.VALID_PHONE)) {
+            if (stateMachine.transition(flow, BookingEvent.VALID_PHONE)) {
                 confirmation.promptComment(chatId, flow, bot);
             }
         }
@@ -120,7 +125,7 @@ public final class BookingFormService {
         Base base = baseRepository.findById(flow.baseId).orElse(null);
         Room room = roomRepository.findById(flow.roomId).orElse(null);
         return base != null && room != null && room.active() && room.baseId() == base.id()
-                && rules.canBook(base, start, flow.hours)
+                && rules.canBook(base, start, flow.hours, staffAccess.isStaff(userId))
                 && bookingRepository.addIfFree(new Booking(flow.roomId, userId, start, flow.hours,
                 flow.name, flow.phone, flow.comment == null ? "" : flow.comment));
     }

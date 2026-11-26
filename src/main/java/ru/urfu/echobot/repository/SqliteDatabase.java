@@ -67,6 +67,8 @@ public final class SqliteDatabase {
             createRoomsTable(statement);
             createBookingsTable(statement);
             createSubscriptionsTable(statement);
+            createKnownUsersTable(statement);
+            createAdministratorsTable(statement);
             createIndexes(statement);
         } catch (SQLException exception) {
             throw new IllegalStateException("Не удалось инициализировать базу данных SQLite", exception);
@@ -139,6 +141,31 @@ public final class SqliteDatabase {
                 """);
     }
 
+    /// Создаёт таблицу пользователей, которые хотя бы раз писали боту.
+    ///
+    /// @param statement команда выполнения SQL
+    /// @throws SQLException если таблица не создана
+    private void createKnownUsersTable(Statement statement) throws SQLException {
+        statement.execute("""
+                CREATE TABLE IF NOT EXISTS known_users (
+                    id INTEGER PRIMARY KEY,
+                    username TEXT NOT NULL
+                )
+                """);
+    }
+
+    /// Создаёт таблицу администраторов.
+    ///
+    /// @param statement команда выполнения SQL
+    /// @throws SQLException если таблица не создана
+    private void createAdministratorsTable(Statement statement) throws SQLException {
+        statement.execute("""
+                CREATE TABLE IF NOT EXISTS administrators (
+                    user_id INTEGER PRIMARY KEY REFERENCES known_users(id)
+                )
+                """);
+    }
+
     /// Добавляет правила отмены в базы, созданные до Задачи 3.
     ///
     /// @param statement команда выполнения SQL
@@ -189,5 +216,7 @@ public final class SqliteDatabase {
                 + "ON bookings(room_id, start_time, end_time)");
         statement.execute("CREATE INDEX IF NOT EXISTS bookings_user_time ON bookings(user_id, start_time)");
         statement.execute("CREATE INDEX IF NOT EXISTS subscriptions_base ON subscriptions(base_id)");
+        statement.execute("CREATE INDEX IF NOT EXISTS known_users_username "
+                + "ON known_users(username COLLATE NOCASE)");
     }
 }

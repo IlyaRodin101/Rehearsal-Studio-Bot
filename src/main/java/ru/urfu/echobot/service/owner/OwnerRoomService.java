@@ -31,7 +31,7 @@ final class OwnerRoomService {
     /// Сообщения и клавиатуры.
     private final OwnerMessaging messaging;
     /// Автомат состояний.
-    private final GenericStateMachine<OwnerSession.Step, OwnerSession.Event> stateMachine;
+    private final GenericStateMachine<OwnerState, OwnerEvent> stateMachine;
     /// Клавиатуры залов.
     private final OwnerButtons buttons;
     /// Черновик новой базы.
@@ -46,7 +46,7 @@ final class OwnerRoomService {
     /// @param draftSchedule черновик новой базы
     /// @param buttons       клавиатуры баз и залов
     OwnerRoomService(OwnerSessions sessions, OwnerAccess access, OwnerMessaging messaging,
-                     GenericStateMachine<OwnerSession.Step, OwnerSession.Event> stateMachine,
+                     GenericStateMachine<OwnerState, OwnerEvent> stateMachine,
                      OwnerDraftScheduleService draftSchedule, OwnerButtons buttons) {
         this.sessions = sessions;
         this.access = access;
@@ -64,7 +64,7 @@ final class OwnerRoomService {
         OwnerSession session = sessions.get(userId);
         Base base = access.selectedBase(userId, session, bot);
         if (base != null) {
-            stateMachine.reset(session, OwnerSession.Step.IDLE);
+            stateMachine.reset(session, OwnerState.IDLE);
             messaging.send(bot, userId, ROOMS_HEADER, buttons.roomsButtons(userId));
         }
     }
@@ -79,7 +79,7 @@ final class OwnerRoomService {
         Room room = access.activeOwnedRoom(userId, session, roomId, bot);
         if (room != null) {
             session.selectedRoomId = room.id();
-            stateMachine.reset(session, OwnerSession.Step.IDLE);
+            stateMachine.reset(session, OwnerState.IDLE);
             messaging.send(bot, userId, buttons.roomTitle(room), buttons.roomMenuButtons(room));
         }
     }
@@ -90,7 +90,7 @@ final class OwnerRoomService {
     /// @param bot    бот для отправки
     void askRoomName(long userId, Bot bot) {
         OwnerSession session = sessions.get(userId);
-        if (stateMachine.transition(session, OwnerSession.Event.ADD_ROOM_TO_BASE)) {
+        if (stateMachine.transition(session, OwnerEvent.ADD_ROOM_TO_BASE)) {
             messaging.send(bot, userId, ASK_ROOM, messaging.backKeyboard());
         }
     }
@@ -104,7 +104,7 @@ final class OwnerRoomService {
         OwnerSession session = sessions.get(userId);
         if (text.isBlank()) {
             messaging.send(bot, userId, ASK_ROOM, messaging.backKeyboard());
-        } else if (stateMachine.transition(session, OwnerSession.Event.ENTER_ROOM_NAME)) {
+        } else if (stateMachine.transition(session, OwnerEvent.ENTER_ROOM_NAME)) {
             session.pendingRoomName = text.trim();
             messaging.send(bot, userId, ASK_REQUIRED,
                     messaging.choices(messaging.button("Да", "owner:newrequired:yes"),
@@ -120,9 +120,9 @@ final class OwnerRoomService {
     /// @param bot    бот для отправки
     void setNewRoomRequirement(long userId, String value, Bot bot) {
         OwnerSession session = sessions.get(userId);
-        if (session.step == OwnerSession.Step.CREATE_ROOM_REQUIRED) {
+        if (session.step == OwnerState.CREATE_ROOM_REQUIRED) {
             draftSchedule.setRequirement(userId, value, bot);
-        } else if (session.step == OwnerSession.Step.ROOM_CREATE_REQUIRED && List.of(YES, NO).contains(value)) {
+        } else if (session.step == OwnerState.ROOM_CREATE_REQUIRED && List.of(YES, NO).contains(value)) {
             saveRoom(userId, access.selectedBase(userId, session, bot), value, bot);
         } else {
             access.requireOwner(userId, bot);
@@ -138,7 +138,7 @@ final class OwnerRoomService {
     /// @param bot    бот для отправки
     private void saveRoom(long userId, Base base, String value, Bot bot) {
         OwnerSession session = sessions.get(userId);
-        if (base != null && stateMachine.transition(session, OwnerSession.Event.SET_ROOM_REQUIREMENT)) {
+        if (base != null && stateMachine.transition(session, OwnerEvent.SET_ROOM_REQUIREMENT)) {
             access.roomRepository().save(new Room(0, base.id(), session.pendingRoomName, YES.equals(value)));
             session.pendingRoomName = null;
             messaging.send(bot, userId, ROOMS_HEADER, buttons.roomsButtons(userId));
@@ -153,7 +153,7 @@ final class OwnerRoomService {
     void beginRoomNameEdit(long userId, long roomId, Bot bot) {
         OwnerSession session = sessions.get(userId);
         if (access.activeOwnedRoom(userId, session, roomId, bot) != null
-                && stateMachine.transition(session, OwnerSession.Event.EDIT_ROOM_NAME)) {
+                && stateMachine.transition(session, OwnerEvent.EDIT_ROOM_NAME)) {
             messaging.send(bot, userId, "Введите новое название зала.", messaging.backKeyboard());
         }
     }
@@ -181,7 +181,7 @@ final class OwnerRoomService {
     void confirmRoomDelete(long userId, long roomId, Bot bot) {
         OwnerSession session = sessions.get(userId);
         Room room = access.activeOwnedRoom(userId, session, roomId, bot);
-        if (room != null && stateMachine.transition(session, OwnerSession.Event.DELETE_ROOM)) {
+        if (room != null && stateMachine.transition(session, OwnerEvent.DELETE_ROOM)) {
             messaging.send(bot, userId, "Удалить зал «" + room.name()
                     + "»? Новые записи в нём будут недоступны, уже созданные сохранятся.",
                     messaging.choices(messaging.button("Удалить", "owner:deleteyes:" + room.id()),
@@ -197,8 +197,8 @@ final class OwnerRoomService {
     void deleteRoom(long userId, long roomId, Bot bot) {
         OwnerSession session = sessions.get(userId);
         Room room = access.activeOwnedRoom(userId, session, roomId, bot);
-        if (room != null && session.step == OwnerSession.Step.DELETE_ROOM
-                && stateMachine.transition(session, OwnerSession.Event.DELETE_ROOM_CONFIRMED)) {
+        if (room != null && session.step == OwnerState.DELETE_ROOM
+                && stateMachine.transition(session, OwnerEvent.DELETE_ROOM_CONFIRMED)) {
             access.roomRepository().deactivate(room.id());
             messaging.send(bot, userId, ROOM_PREFIX + room.name() + "» удалён.", buttons.roomsButtons(userId));
         }

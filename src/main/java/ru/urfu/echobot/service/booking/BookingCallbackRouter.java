@@ -34,10 +34,14 @@ public final class BookingCallbackRouter {
     private static final String HOT = "hot";
     /// Пространство имён подписок.
     private static final String SUB = "sub";
+    /// Пространство имён расписания.
+    private static final String SCHEDULE = "schedule";
     /// Действие возврата в главное меню.
     private static final String HOME = "home";
     /// Действие перехода к базам владельца.
     private static final String BASES = "bases";
+    /// Действие перехода к администраторам.
+    private static final String ADMINS = "admins";
     /// Действие выбора базы.
     private static final String BASE = "base";
     /// Действие списка.
@@ -71,6 +75,8 @@ public final class BookingCallbackRouter {
     private final BookingClientController clientController;
     /// Справочная информация о базах.
     private final BaseInformationService baseInformation;
+    /// Контроллер расписания.
+    private final ScheduleController scheduleController;
     /// Обработчики пространств имён callback-команд.
     private final Map<String, BiConsumer<BookingCallback, Bot>> namespaces;
     /// Обработчики действий главного меню.
@@ -91,14 +97,17 @@ public final class BookingCallbackRouter {
     /// @param navigation       переходы бронирования
     /// @param clientController записи клиента
     /// @param baseInformation  справочная информация
+    /// @param scheduleController контроллер расписания
     public BookingCallbackRouter(OwnerManagementService ownerService, BookingMenuController menuController,
                                  BookingNavigationController navigation,
                                  BookingClientController clientController,
-                                 BaseInformationService baseInformation) {
+                                 BaseInformationService baseInformation,
+                                 ScheduleController scheduleController) {
         this.ownerService = ownerService;
         this.navigation = navigation;
         this.clientController = clientController;
         this.baseInformation = baseInformation;
+        this.scheduleController = scheduleController;
         namespaces = new HashMap<>();
         menuActions = new HashMap<>();
         bookingActions = new HashMap<>();
@@ -139,6 +148,7 @@ public final class BookingCallbackRouter {
         namespaces.put(BOOK, this::handleBooking);
         namespaces.put(ABOUT, this::handleAbout);
         namespaces.put(MINE, clientController::handle);
+        namespaces.put(SCHEDULE, scheduleController::handle);
     }
 
     /// Регистрирует обработчики действий главного меню.
@@ -153,6 +163,10 @@ public final class BookingCallbackRouter {
                 baseInformation.showAboutBases(context.chatId(), bot));
         menuActions.put(BASES, (context, bot) ->
                 ownerService.showBaseList(context.userId(), bot));
+        menuActions.put(ADMINS, (context, bot) ->
+                ownerService.showAdministrators(context.userId(), bot));
+        menuActions.put(SCHEDULE, (context, bot) ->
+                scheduleController.showBases(context.userId(), bot));
         menuActions.put(HOME, (context, bot) ->
                 menuController.returnToMenu(context.chatId(), context.flow(), bot));
     }

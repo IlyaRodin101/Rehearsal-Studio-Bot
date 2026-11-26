@@ -2,6 +2,7 @@ package ru.urfu.echobot.repository;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import ru.urfu.echobot.model.Booking;
 
 /// Хранилище броней.
@@ -33,6 +34,20 @@ public interface BookingRepository {
     /// @param roomId идентификатор зала
     /// @return брони зала, отсортированные по времени начала
     List<Booking> findByRoom(long roomId);
+
+    /// Ищет бронь зала по точному времени начала.
+    ///
+    /// @param roomId идентификатор зала
+    /// @param start  время начала
+    /// @return бронь или пустой результат
+    Optional<Booking> findByRoomAndStart(long roomId, LocalDateTime start);
+
+    /// Удаляет бронь зала по точному времени начала без проверки владельца.
+    ///
+    /// @param roomId идентификатор зала
+    /// @param start  время начала
+    /// @return true, если удалена ровно одна бронь
+    boolean deleteByRoomAndStart(long roomId, LocalDateTime start);
 
     /// Удаляет бронь клиента, если она относится к указанному залу и времени.
     ///

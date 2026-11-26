@@ -37,7 +37,7 @@ final class OwnerDraftScheduleService {
     /// Сообщения и клавиатуры.
     private final OwnerMessaging messaging;
     /// Автомат состояний.
-    private final GenericStateMachine<OwnerSession.Step, OwnerSession.Event> stateMachine;
+    private final GenericStateMachine<OwnerState, OwnerEvent> stateMachine;
 
     /// Создаёт сервис заполнения новой базы.
     ///
@@ -45,7 +45,7 @@ final class OwnerDraftScheduleService {
     /// @param messaging    сообщения и клавиатуры
     /// @param stateMachine автомат состояний
     OwnerDraftScheduleService(OwnerSessions sessions, OwnerMessaging messaging,
-                              GenericStateMachine<OwnerSession.Step, OwnerSession.Event> stateMachine) {
+                              GenericStateMachine<OwnerState, OwnerEvent> stateMachine) {
         this.sessions = sessions;
         this.messaging = messaging;
         this.stateMachine = stateMachine;
@@ -76,7 +76,7 @@ final class OwnerDraftScheduleService {
         OwnerSession session = sessions.get(userId);
         if (hour < 0 || hour > LAST_HOUR) {
             messaging.send(bot, userId, OwnerMessaging.UNAVAILABLE, messaging.backKeyboard());
-        } else if (stateMachine.transition(session, OwnerSession.Event.ENTER_OPENING)) {
+        } else if (stateMachine.transition(session, OwnerEvent.ENTER_OPENING)) {
             session.openHour = hour;
             promptClosing(userId, hour, bot);
         }
@@ -91,7 +91,7 @@ final class OwnerDraftScheduleService {
         OwnerSession session = sessions.get(userId);
         if (hour <= session.openHour || hour > DAY_END) {
             messaging.send(bot, userId, OwnerMessaging.UNAVAILABLE, messaging.backKeyboard());
-        } else if (stateMachine.transition(session, OwnerSession.Event.FINISH_DAY)) {
+        } else if (stateMachine.transition(session, OwnerEvent.FINISH_DAY)) {
             session.schedule.put(DayOfWeek.of(session.day), new OpeningHours(session.openHour, hour));
             finishDay(userId, bot);
         }
@@ -103,7 +103,7 @@ final class OwnerDraftScheduleService {
     /// @param bot    бот для отправки
     void closeDay(long userId, Bot bot) {
         OwnerSession session = sessions.get(userId);
-        if (stateMachine.transition(session, OwnerSession.Event.FINISH_DAY)) {
+        if (stateMachine.transition(session, OwnerEvent.FINISH_DAY)) {
             session.schedule.remove(DayOfWeek.of(session.day));
             finishDay(userId, bot);
         }
@@ -134,7 +134,7 @@ final class OwnerDraftScheduleService {
         session.day++;
         if (session.day <= DAYS_IN_WEEK) {
             promptOpening(userId, bot);
-        } else if (stateMachine.transition(session, OwnerSession.Event.LAST_DAY)) {
+        } else if (stateMachine.transition(session, OwnerEvent.LAST_DAY)) {
             promptFirstRoom(userId, bot);
         }
     }
@@ -156,7 +156,7 @@ final class OwnerDraftScheduleService {
         OwnerSession session = sessions.get(userId);
         if (text.isBlank()) {
             messaging.send(bot, userId, ASK_ROOM, messaging.backKeyboard());
-        } else if (stateMachine.transition(session, OwnerSession.Event.ENTER_ROOM_NAME)) {
+        } else if (stateMachine.transition(session, OwnerEvent.ENTER_ROOM_NAME)) {
             session.pendingRoomName = text.trim();
             askRequirement(userId, bot);
         }
@@ -169,8 +169,8 @@ final class OwnerDraftScheduleService {
     /// @param bot    бот для отправки
     void setRequirement(long userId, String value, Bot bot) {
         OwnerSession session = sessions.get(userId);
-        if (session.step == OwnerSession.Step.CREATE_ROOM_REQUIRED && List.of(YES, NO).contains(value)
-                && stateMachine.transition(session, OwnerSession.Event.SET_ROOM_REQUIREMENT)) {
+        if (session.step == OwnerState.CREATE_ROOM_REQUIRED && List.of(YES, NO).contains(value)
+                && stateMachine.transition(session, OwnerEvent.SET_ROOM_REQUIREMENT)) {
             session.newRooms.add(new Room(0, 0, session.pendingRoomName, YES.equals(value)));
             session.pendingRoomName = null;
             messaging.send(bot, userId, ASK_MORE_ROOMS,
@@ -187,11 +187,11 @@ final class OwnerDraftScheduleService {
     /// @param bot    бот для отправки
     void addAnotherRoom(long userId, String choice, Bot bot) {
         OwnerSession session = sessions.get(userId);
-        if (session.step == OwnerSession.Step.CREATE_MORE_ROOMS && "add".equals(choice)
-                && stateMachine.transition(session, OwnerSession.Event.ADD_ROOM)) {
+        if (session.step == OwnerState.CREATE_MORE_ROOMS && "add".equals(choice)
+                && stateMachine.transition(session, OwnerEvent.ADD_ROOM)) {
             messaging.send(bot, userId, ASK_ROOM, messaging.backKeyboard());
-        } else if (session.step == OwnerSession.Step.CREATE_MORE_ROOMS && "done".equals(choice)
-                && stateMachine.transition(session, OwnerSession.Event.FINISH_ROOMS)) {
+        } else if (session.step == OwnerState.CREATE_MORE_ROOMS && "done".equals(choice)
+                && stateMachine.transition(session, OwnerEvent.FINISH_ROOMS)) {
             messaging.showLeadHours(userId, bot);
         }
     }

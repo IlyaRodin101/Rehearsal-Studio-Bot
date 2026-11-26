@@ -26,8 +26,10 @@ import ru.urfu.echobot.repository.SqliteBaseRepository;
 import ru.urfu.echobot.repository.SqliteBookingRepository;
 import ru.urfu.echobot.repository.SqliteDatabase;
 import ru.urfu.echobot.repository.SqliteRoomRepository;
+import ru.urfu.echobot.repository.SqliteSubscriptionRepository;
 import ru.urfu.echobot.service.Button;
 import ru.urfu.echobot.service.Message;
+import ru.urfu.echobot.service.UserDirectory;
 
 /// Tests booking conversations against isolated SQLite data without Telegram.
 final class BookingMessageProcessingServiceTest {
@@ -45,6 +47,8 @@ final class BookingMessageProcessingServiceTest {
     private BookingMessageProcessingService service;
     @TempDir
     private Path temporaryDirectory;
+    /// База данных тестового сценария.
+    private SqliteDatabase database;
     private SqliteBaseRepository baseRepository;
     private SqliteBookingRepository bookingRepository;
     private SqliteRoomRepository roomRepository;
@@ -53,7 +57,7 @@ final class BookingMessageProcessingServiceTest {
     @BeforeEach
     void setUp() {
         Clock clock = Clock.fixed(Instant.parse("2026-10-20T07:00:00Z"), ZoneOffset.UTC);
-        SqliteDatabase database = new SqliteDatabase(temporaryDirectory.resolve("bookings.db").toString());
+        database = new SqliteDatabase(temporaryDirectory.resolve("bookings.db").toString());
         baseRepository = new SqliteBaseRepository(database);
         roomRepository = new SqliteRoomRepository(database);
         bookingRepository = new SqliteBookingRepository(database);
@@ -71,7 +75,7 @@ final class BookingMessageProcessingServiceTest {
         roomRepository.save(new Room(0, north.id(), "Зал 1", false));
         roomRepository.save(new Room(0, north.id(), "Студия", true));
         service = new BookingMessageProcessingService(baseRepository, roomRepository, bookingRepository,
-                new BookingRules(clock));
+                new BookingRules(clock), Set.of(), new SqliteSubscriptionRepository(database));
         bot = new DummyBot();
     }
 
@@ -138,12 +142,42 @@ final class BookingMessageProcessingServiceTest {
                 baseRepository,
                 roomRepository,
                 bookingRepository,
-                new BookingRules(clock), Set.of(CLIENT));
+                new BookingRules(clock), Set.of(CLIENT), new SqliteSubscriptionRepository(database));
 
         ownerService.processMessage(new Message("/start", null, List.of()), CLIENT, bot);
 
         assertTrue(lastButtons().containsAll(List.of("Забронировать", "Мои записи", "О базе",
-                "Горячие слоты", "Подписка", "Базы")));
+                "Горячие слоты", "Подписка", "Базы", "Администраторы")));
+    }
+
+    /// Администратор запоминается по имени и может бронировать время ближе обычного срока.
+    @Test
+    void administratorCanBookCloserThanLeadTimeAndUsernameIsRemembered() {
+        UserDirectory directory = UserDirectory.inMemory();
+        BookingMessageProcessingService adminService = new BookingMessageProcessingService(
+                baseRepository, roomRepository, bookingRepository,
+                new BookingRules(Clock.fixed(Instant.parse("2026-10-20T07:00:00Z"), ZoneOffset.UTC)),
+                Set.of(), new SqliteSubscriptionRepository(database), directory);
+
+        adminService.processMessage(new Message("/start", null, List.of(), "@Ivan_Admin"), CLIENT, bot);
+        assertTrue(directory.findByUsername("ivan_admin").isPresent());
+        directory.addAdministrator(directory.findByUsername("ivan_admin").orElseThrow());
+
+        adminService.processMessage(new Message(null, "menu:book", List.of()), CLIENT, bot);
+        adminService.processMessage(new Message(null, "book:base:1", List.of()), CLIENT, bot);
+        adminService.processMessage(new Message(null, "book:room:1", List.of()), CLIENT, bot);
+        adminService.processMessage(new Message(null, "book:day:2026-10-20", List.of()), CLIENT, bot);
+
+        assertTrue(lastButtons().contains("11:00"));
+        adminService.processMessage(new Message(null, "book:time:2026-10-20:11", List.of()), CLIENT, bot);
+        adminService.processMessage(new Message(null, "book:hours:1", List.of()), CLIENT, bot);
+        adminService.processMessage(new Message("Мария", null, List.of()), CLIENT, bot);
+        adminService.processMessage(new Message("+7 916 777-88-99", null, List.of()), CLIENT, bot);
+        adminService.processMessage(new Message(null, "book:skip", List.of()), CLIENT, bot);
+        adminService.processMessage(new Message(null, "book:confirm", List.of()), CLIENT, bot);
+
+        assertTrue(bot.messages().stream().anyMatch(message -> "Готово, запись создана.".equals(message.text())));
+        assertEquals(1, bookingRepository.findByUser(CLIENT).size());
     }
 
     /// Given: клиент проходит весь диалог. When: подтверждает бронь. Then: запись создана и видна в «Мои записи».
@@ -199,7 +233,8 @@ final class BookingMessageProcessingServiceTest {
 
         assertTrue(bot.messages().stream().anyMatch(m -> "Запись отменена.".equals(m.text())));
         assertTrue(bot.messages().stream().anyMatch(m -> m.text() != null
-                && m.text().startsWith("Клиент отменил запись бесплатно:")));
+                && m.text().startsWith("Клиент отменил запись бесплатно:")
+                && m.text().contains("Telegram ID: " + CLIENT)));
         assertEquals("У вас пока нет будущих записей.", lastText());
     }
 

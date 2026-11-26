@@ -83,7 +83,7 @@ public final class HotSlotController {
     /// @param bot    бот для отправки сообщений
     void showBaseList(long chatId, BookingStep flow, Bot bot) {
         flow.clearBooking();
-        flow.step = BookingStep.Step.MENU;
+        flow.step = BookingState.MENU;
         List<Base> bases = baseRepository.findAll();
         if (bases.isEmpty()) {
             send(bot, chatId, "Пока нет доступных баз.", keyboards.choices(keyboards.button(BACK, MENU_HOME)));

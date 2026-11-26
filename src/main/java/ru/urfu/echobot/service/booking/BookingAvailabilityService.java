@@ -37,24 +37,27 @@ public final class BookingAvailabilityService {
 
     /// Проверяет, есть ли свободное время в выбранном месяце.
     ///
-    /// @param base база, в которой выполняется поиск
-    /// @param roomId идентификатор зала
-    /// @param month месяц для проверки
+    /// @param base           база, в которой выполняется поиск
+    /// @param roomId         идентификатор зала
+    /// @param month          месяц для проверки
+    /// @param ignoreLeadTime true, чтобы не учитывать срок бронирования
     /// @return true, если в месяце есть доступное время
-    public boolean monthHasAvailability(Base base, long roomId, YearMonth month) {
-        return rangeHasAvailability(base, roomId, month.atDay(1), month.atEndOfMonth());
+    public boolean monthHasAvailability(Base base, long roomId, YearMonth month, boolean ignoreLeadTime) {
+        return rangeHasAvailability(base, roomId, month.atDay(1), month.atEndOfMonth(), ignoreLeadTime);
     }
 
     /// Проверяет доступность бронирования хотя бы на один день заданного периода.
     ///
-    /// @param base база, в которой выполняется поиск
-    /// @param roomId идентификатор зала
-    /// @param start первый день периода
-    /// @param end последний день периода
+    /// @param base           база, в которой выполняется поиск
+    /// @param roomId         идентификатор зала
+    /// @param start          первый день периода
+    /// @param end            последний день периода
+    /// @param ignoreLeadTime true, чтобы не учитывать срок бронирования
     /// @return true, если в периоде есть доступное время
-    public boolean rangeHasAvailability(Base base, long roomId, LocalDate start, LocalDate end) {
+    public boolean rangeHasAvailability(Base base, long roomId, LocalDate start, LocalDate end,
+                                        boolean ignoreLeadTime) {
         for (LocalDate date = start; !date.isAfter(end); date = date.plusDays(1)) {
-            if (dateHasAvailability(base, roomId, date)) {
+            if (dateHasAvailability(base, roomId, date, ignoreLeadTime)) {
                 return true;
             }
         }
@@ -63,28 +66,30 @@ public final class BookingAvailabilityService {
 
     /// Проверяет, доступен ли хотя бы один час в указанном зале и дне.
     ///
-    /// @param base база, в которой находится зал
-    /// @param roomId идентификатор зала
-    /// @param date проверяемая дата
+    /// @param base           база, в которой находится зал
+    /// @param roomId         идентификатор зала
+    /// @param date           проверяемая дата
+    /// @param ignoreLeadTime true, чтобы не учитывать срок бронирования
     /// @return true, если в этот день можно начать бронирование
-    public boolean dateHasAvailability(Base base, long roomId, LocalDate date) {
+    public boolean dateHasAvailability(Base base, long roomId, LocalDate date, boolean ignoreLeadTime) {
         Room room = roomRepository.findById(roomId).orElse(null);
-        return room != null && room.active() && !availableStarts(base, room, date).isEmpty();
+        return room != null && room.active() && !availableStarts(base, room, date, ignoreLeadTime).isEmpty();
     }
 
     /// Возвращает свободные часы начала бронирования в заданном зале и дне.
     ///
-    /// @param base база, в которой находится зал
-    /// @param room зал для проверки
-    /// @param date дата бронирования
+    /// @param base           база, в которой находится зал
+    /// @param room           зал для проверки
+    /// @param date           дата бронирования
+    /// @param ignoreLeadTime true, чтобы не учитывать срок бронирования
     /// @return список доступных часов начала
-    public List<Integer> availableStarts(Base base, Room room, LocalDate date) {
+    public List<Integer> availableStarts(Base base, Room room, LocalDate date, boolean ignoreLeadTime) {
         OpeningHours hours = base.hoursOn(date.getDayOfWeek()).orElse(null);
         if (hours == null || !room.active()) {
             return Collections.emptyList();
         }
         List<Integer> result = new ArrayList<>();
-        ZonedDateTime earliest = rules.earliestStart(base);
+        ZonedDateTime earliest = ignoreLeadTime ? rules.now(base) : rules.earliestStart(base);
         for (int hour = hours.openHour(); hour < hours.closeHour(); hour++) {
             LocalDateTime start = date.atTime(hour, 0);
             if (start.atZone(ZoneId.of(base.timezone())).isBefore(earliest)) {
